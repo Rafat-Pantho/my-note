@@ -1848,12 +1848,15 @@ dependencies = [
 name = "my-note"
 version = "0.1.0"
 dependencies = [
+ "gtk",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "window-vibrancy",
  "windows-sys 0.61.2",
+ "windows-version",
 ]
 
 [[package]]

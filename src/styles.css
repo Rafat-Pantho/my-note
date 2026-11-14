@@ -1,89 +1,164 @@
+/* ---------- theme variables ----------
+   Dark is the default (before the first appearance call); [data-theme="light"] overrides it.
+   JS sets: data-theme (resolved light/dark), .fx (effect active), .fx-blur, .reduce-fx, --fx-pct. */
 :root {
-  --bg: #1e1e1e;
-  --bg-bar: #2b2b2b;
-  --bg-hover: #3a3a3a;
+  color-scheme: dark;
+  --bg: #1e1e1e;          /* editor and active tab */
+  --bg-strip: #161616;    /* tab strip and status bar */
+  --bg-pop: #2b2b2b;      /* menus, dialogs, find panel: always opaque */
+  --bg-hover: rgb(255 255 255 / 0.08);
+  --bg-hover-strong: rgb(255 255 255 / 0.16);
   --fg: #d4d4d4;
   --fg-dim: #9a9a9a;
-  --border: #3c3c3c;
+  --border: rgb(255 255 255 / 0.1);
   --accent: #4da3ff;
   --selection: #264f78;
   --caret: #aeafad;
+  --active-line: rgb(255 255 255 / 0.04);
+  --shadow: rgb(0 0 0 / 0.45);
+  --shadow-soft: rgb(0 0 0 / 0.3);
+  --scrim: rgb(0 0 0 / 0.4);
+  --tint: rgb(24 24 24 / var(--tint-a));
+  --tint-a: 0.35;
   --editor-font: 14px;
+  --radius: 8px;
+  --ui-font: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono-font: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+  --fx-pct: 100%;
+  /* Surfaces. Solid by default; with an effect they become translucent (background only, never text). */
+  --s-bg: var(--bg);
+  --s-strip: var(--bg-strip);
+  --dur: 120ms;
 }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-strip: #e9ecf0;
+  --bg-pop: #ffffff;
+  --bg-hover: rgb(0 0 0 / 0.06);
+  --bg-hover-strong: rgb(0 0 0 / 0.12);
+  --fg: #1f2328;
+  --fg-dim: #5c6670;
+  --border: rgb(0 0 0 / 0.12);
+  --accent: #0b6bcb;
+  --selection: #add6ff;
+  --caret: #000000;
+  --active-line: rgb(0 0 0 / 0.04);
+  --shadow: rgb(0 0 0 / 0.22);
+  --shadow-soft: rgb(0 0 0 / 0.14);
+  --scrim: rgb(0 0 0 / 0.2);
+  --tint: rgb(255 255 255 / var(--tint-a));
+}
+/* Effect active: only the backgrounds get the opacity. Tint layer keeps text readable on any wallpaper. */
+:root.fx {
+  --s-bg: color-mix(in srgb, var(--bg) var(--fx-pct), transparent);
+  --s-strip: color-mix(in srgb, var(--bg-strip) var(--fx-pct), transparent);
+}
+:root.fx-blur { --tint-a: 0.15; }
+
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+html { background: var(--bg); }
 body {
   background: var(--bg);
   color: var(--fg);
   overflow: hidden;
-  font: 12px "Segoe UI", system-ui, sans-serif;
+  font: 12px var(--ui-font);
   user-select: none;
 }
+html.fx, html.fx body { background: transparent; }
+#tint { display: none; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--tint); }
+html.fx #tint { display: block; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 #app { display: flex; flex-direction: column; height: 100%; }
-#editor { flex: 1; min-height: 0; position: relative; user-select: text; }
+#editor { flex: 1; min-height: 0; position: relative; user-select: text; background: var(--s-bg); }
 
-/* tabs */
-#tabbar { display: flex; background: var(--bg-bar); border-bottom: 1px solid var(--border); flex: none; }
-#tabs { display: flex; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+/* ---------- tabs (browser style) ---------- */
+#tabbar { display: flex; align-items: flex-end; flex: none; background: var(--s-strip); padding: 6px 6px 0; gap: 2px; }
+#tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
 .tab {
-  display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 12px;
-  max-width: 200px; min-width: 90px; border-right: 1px solid var(--border);
-  color: var(--fg-dim); cursor: default; flex: none;
+  position: relative; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px;
+  max-width: 220px; min-width: 100px; flex: none; cursor: default; color: var(--fg-dim);
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: background var(--dur), color var(--dur);
 }
-.tab:hover { background: var(--bg-hover); }
-.tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 2px 0 var(--accent); }
-.tab.dragging { opacity: 0.7; }
+.tab:not(.active):hover { background: var(--bg-hover); color: var(--fg); }
+.tab.active { background: var(--s-bg); color: var(--fg); box-shadow: 0 -1px 6px var(--shadow-soft); }
+.tab.active::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 2px; border-radius: 0 0 2px 2px; background: var(--accent); }
+/* thin divider between inactive tabs */
+.tab:not(.active)::after { content: ""; position: absolute; right: -2px; top: 9px; bottom: 9px; width: 1px; background: var(--border); }
+.tab.active::after, .tab:hover::after, .tab:has(+ .active)::after, .tab:last-child::after { display: none; }
+.tab.dragging { opacity: 0.75; }
+.tab.enter { animation: tab-in var(--dur) ease-out; }
 .tab .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab .dirty { color: var(--accent); font-size: 10px; display: none; }
 .tab.is-dirty .dirty { display: inline; }
-.tab .close { width: 18px; height: 18px; line-height: 16px; border-radius: 3px; padding: 0; color: var(--fg-dim); }
-.tab .close:hover { background: #555; color: var(--fg); }
-#newtab { width: 32px; font-size: 16px; flex: none; }
-#newtab:hover { background: var(--bg-hover); }
+.tab .close { width: 20px; height: 20px; line-height: 18px; border-radius: 50%; padding: 0; color: var(--fg-dim); transition: background var(--dur); }
+.tab .close:hover { background: var(--bg-hover-strong); color: var(--fg); }
+.tabbtn { height: 28px; margin-bottom: 2px; padding: 0 10px; flex: none; border-radius: 6px; font-size: 14px; color: var(--fg-dim); transition: background var(--dur), color var(--dur); }
+.tabbtn:hover { background: var(--bg-hover); color: var(--fg); }
+#newtab { width: 28px; padding: 0; font-size: 16px; }
+#tabbar .sp { flex: 1; }
+#viewmenu { font-size: 12px; }
 
-/* status bar */
-#statusbar { display: flex; align-items: center; gap: 2px; height: 24px; padding: 0 6px; flex: none;
-  background: var(--bg-bar); border-top: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap; }
+/* ---------- status bar ---------- */
+#statusbar { display: flex; align-items: center; gap: 2px; height: 26px; padding: 0 6px; flex: none;
+  background: var(--s-strip); color: var(--fg-dim); white-space: nowrap; }
 #statusbar .sp { flex: 1; }
 #statusbar .msg { margin-right: 12px; color: var(--fg); }
-#statusbar span, #statusbar button { padding: 2px 8px; border-radius: 3px; }
+#statusbar span, #statusbar button { padding: 2px 8px; border-radius: 6px; }
+#statusbar button { transition: background var(--dur), color var(--dur); }
 #statusbar button:hover { background: var(--bg-hover); color: var(--fg); }
 
-/* menu */
-.menu { position: fixed; z-index: 30; background: var(--bg-bar); border: 1px solid var(--border);
-  border-radius: 4px; padding: 4px 0; box-shadow: 0 4px 16px #0008; min-width: 130px; }
-.menu button { display: block; width: 100%; text-align: left; padding: 5px 14px 5px 22px; position: relative; }
-.menu button:hover { background: var(--bg-hover); }
-.menu button.on::before { content: "✓"; position: absolute; left: 6px; }
+/* ---------- menu ---------- */
+.menu { position: fixed; z-index: 30; background: var(--bg-pop); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px; box-shadow: 0 8px 24px var(--shadow); min-width: 150px;
+  animation: pop var(--dur) ease-out; }
+.menu button { display: block; width: 100%; text-align: left; padding: 5px 14px 5px 24px; position: relative; border-radius: 5px; }
+.menu button:hover:not(:disabled) { background: var(--bg-hover); }
+.menu button:disabled { color: var(--fg-dim); cursor: default; }
+.menu button.on::before { content: "✓"; position: absolute; left: 7px; }
+.menu .hd { padding: 6px 14px 2px 8px; font-size: 11px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.menu .note { padding: 4px 8px 4px 8px; max-width: 260px; font-size: 11px; line-height: 1.35; color: var(--fg-dim); white-space: normal; user-select: text; }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 
-/* modal */
-.modal-bg { position: fixed; inset: 0; z-index: 40; background: #0006; display: flex; align-items: flex-start; justify-content: center; padding-top: 18vh; }
-.modal { background: var(--bg-bar); border: 1px solid var(--border); border-radius: 6px; padding: 18px; width: 380px; max-width: 90vw; box-shadow: 0 8px 28px #000a; user-select: text; }
+/* ---------- modal ---------- */
+.modal-bg { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding-top: 18vh; animation: fade var(--dur) ease-out; }
+.modal { background: var(--bg-pop); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: 380px; max-width: 90vw; box-shadow: 0 16px 40px var(--shadow); user-select: text; animation: pop var(--dur) ease-out; }
 .modal p { margin: 0 0 14px; font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 .modal input[type=text] { width: 100%; margin-bottom: 14px; }
 .modal .buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.modal .buttons button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-hover); }
+.modal .buttons button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-hover); transition: background var(--dur); }
+.modal .buttons button:hover { background: var(--bg-hover-strong); }
 .modal .buttons button.default { background: var(--accent); border-color: var(--accent); color: #fff; }
-input[type=text] { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; font: inherit; outline: none; user-select: text; }
+input[type=text] { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font: inherit; outline: none; user-select: text; }
 input[type=text]:focus { border-color: var(--accent); }
 
-/* find / replace */
-.find { position: absolute; top: 6px; right: 18px; z-index: 20; background: var(--bg-bar); border: 1px solid var(--border);
-  border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 16px #0008; width: 380px; max-width: calc(100% - 36px); }
+/* ---------- find / replace ---------- */
+.find { position: absolute; top: 8px; right: 18px; z-index: 20; background: var(--bg-pop); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px var(--shadow); width: 380px; max-width: calc(100% - 36px); animation: pop var(--dur) ease-out; }
 .find .row { display: flex; gap: 4px; align-items: center; }
 .find .row input[type=text] { flex: 1; min-width: 0; }
-.find button { padding: 3px 8px; border-radius: 3px; border: 1px solid var(--border); }
+.find button { padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); transition: background var(--dur); }
 .find button:hover { background: var(--bg-hover); }
 .find .opts { flex-wrap: wrap; gap: 4px 12px; color: var(--fg-dim); }
 .find .opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .find .fmsg { color: var(--accent); margin-left: auto; }
 .find:not(.replace) .rep { display: none; }
 
-/* print: only the document text */
+/* ---------- motion: short, and off for prefers-reduced-motion or the Reduce effects switch ---------- */
+@keyframes tab-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes pop { from { opacity: 0; transform: translateY(-3px) scale(0.97); } }
+@keyframes fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+html.reduce-fx *, html.reduce-fx *::before, html.reduce-fx *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+
+/* ---------- print: only the document text ---------- */
 #print { display: none; }
 @media print {
-  html, body { height: auto; overflow: visible; background: #fff; }
-  #app, .modal-bg, .menu { display: none !important; }
+  html, html.fx, html body, html.fx body { height: auto; overflow: visible; background: #fff !important; }
+  #app, #tint, .modal-bg, .menu { display: none !important; }
   #print { display: block; white-space: pre-wrap; word-break: break-word; font: 11pt Consolas, monospace; color: #000; margin: 0; }
 }

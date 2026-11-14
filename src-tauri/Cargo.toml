@@ -12,15 +12,31 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# macos-private-api: required by Tauri for transparent windows on macOS (vibrancy). No effect on other OSes.
+tauri = { version = "2", features = ["macos-private-api"] }
 # Native open/save pickers, called from Rust only (no frontend permission). Pulls in rfd.
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Mica / Acrylic (Windows) and vibrancy (macOS) behind a transparent window. Small: a few DWM / AppKit calls.
+window-vibrancy = "0.8"
 
-# Startup timing (process creation time). Already in the dependency tree via tauri; no size cost.
+# windows-sys: startup timing (process creation time), plus registry and high-contrast reads for the effects
+# fallback checks. windows-version: OS build number (the crate window-vibrancy gates on). Both are already in
+# the dependency tree, so no size cost beyond the extra bindings.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+    "Win32_UI_Accessibility",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-version = "0.1"
+
+# Linux: ask GDK whether a compositor is running (translucency needs one). Already in the tree via tauri.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
 
 [profile.release]
 opt-level = "s"

@@ -9,6 +9,8 @@ import {
 } from "./tabs/ipc";
 import { buildSession, parseSession, type Prefs } from "./tabs/session";
 import { type Tab, TabBar } from "./tabs/tabs";
+import { loadAppearance } from "./theme/appearance";
+import { createViewMenu } from "./theme/viewmenu";
 
 const APP = "My Note";
 const SESSION_DELAY_MS = 1500;
@@ -388,7 +390,7 @@ function onKeyDown(e: KeyboardEvent) {
 export async function boot() {
   view = createEditor(document.getElementById("editor")!);
   setUpdateHandler(onUpdate);
-  const [, args] = await Promise.all([restoreSession(), takeLaunchArgs()]);
+  const [, args] = await Promise.all([restoreSession(), takeLaunchArgs(), loadAppearance()]);
   if (!tabs.length) {
     tabs.push(makeTab({ text: "" }));
     active = tabs[0];
@@ -399,6 +401,7 @@ export async function boot() {
 
   window.addEventListener("keydown", onKeyDown, true);
   document.getElementById("newtab")!.onclick = newTab;
+  createViewMenu(document.getElementById("viewmenu")!); // temporary, M3 removes
   document.getElementById("editor")!.addEventListener(
     "wheel",
     (e) => {

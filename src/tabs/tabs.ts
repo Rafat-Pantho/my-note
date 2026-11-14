@@ -22,6 +22,9 @@ export interface TabBarHandlers {
 const DRAG_THRESHOLD = 5;
 
 export class TabBar {
+  /** Ids already shown, so only a newly opened tab plays the enter animation (not every re-render). */
+  private seen: Set<number> | null = null;
+
   constructor(
     private host: HTMLElement,
     private handlers: TabBarHandlers,
@@ -32,7 +35,15 @@ export class TabBar {
   }
 
   render(tabs: Tab[], active: Tab | undefined): void {
-    this.host.replaceChildren(...tabs.map((t) => this.element(t, t === active)));
+    const seen = this.seen;
+    this.host.replaceChildren(
+      ...tabs.map((t) => {
+        const el = this.element(t, t === active);
+        if (seen && !seen.has(t.id)) el.classList.add("enter");
+        return el;
+      }),
+    );
+    this.seen = new Set(tabs.map((t) => t.id));
     this.host.querySelector(".active")?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }
 

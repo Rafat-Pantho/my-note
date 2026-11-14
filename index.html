@@ -3,15 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <title>My Note</title>
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
+    <div id="tint"></div>
     <div id="app">
       <div id="tabbar">
         <div id="tabs"></div>
-        <button id="newtab" title="New tab (Ctrl+N)">+</button>
+        <button id="newtab" class="tabbtn" title="New tab (Ctrl+N)">+</button>
+        <span class="sp"></span>
+        <!-- TEMPORARY (M2): removed in M3 when Settings exists -->
+        <button id="viewmenu" class="tabbtn" title="Temporary test menu: theme and effects">View</button>
       </div>
       <div id="editor"></div>
       <div id="statusbar"></div>
