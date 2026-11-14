@@ -6,7 +6,7 @@ export const theme = EditorView.theme(
     "&": { height: "100%", backgroundColor: "var(--bg)", color: "var(--fg)" },
     ".cm-scroller": {
       fontFamily: "Consolas, 'Cascadia Mono', monospace",
-      fontSize: "14px",
+      fontSize: "var(--editor-font)",
       lineHeight: "1.5",
     },
     ".cm-content": { caretColor: "var(--caret)", padding: "8px 0" },
@@ -17,3 +17,4 @@ export const theme = EditorView.theme(
   },
   { dark: true },
 );
+

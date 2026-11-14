@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: custom app commands only, no plugin or core permissions",
+  "description": "Main window: app commands need no permission; events only for drag-drop and close requests",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }
