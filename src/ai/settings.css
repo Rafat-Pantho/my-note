@@ -1,0 +1,31 @@
+/* Settings > AI (lazy chunk, loaded with ai/settings.ts). Builds on the .st rules in settings/settings.css. */
+.st .ai { max-width: 640px; }
+.st .ai .row .lbl .hint { max-width: 300px; }
+.st .env { margin: 16px 0 0; padding: 4px 16px 14px; border: 1px solid var(--border); border-radius: var(--radius); }
+.st .env.active { border-color: var(--accent); }
+.st .env-head { display: flex; align-items: center; gap: 10px; padding: 10px 0 4px; flex-wrap: wrap; }
+.st .env-head .name { flex: 1; min-width: 120px; font-weight: 600; }
+.st .env-head .kind { color: var(--fg-dim); font-size: 11px; }
+.st .badge { padding: 0 8px; border-radius: 9px; font-size: 11px; line-height: 17px; border: 1px solid var(--border); color: var(--fg-dim); }
+.st .badge.local { color: var(--ok); border-color: currentColor; }
+.st .badge.remote { color: var(--warn); border-color: currentColor; }
+.st .badge.on { color: var(--accent); border-color: currentColor; }
+.st .btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-hover); transition: background var(--dur); }
+.st .btn:hover:not(:disabled) { background: var(--bg-hover-strong); }
+.st .btn:disabled { opacity: 0.5; cursor: default; }
+.st .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.st .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+.st .link { padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.st .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.st .consent { margin-top: 12px; padding: 4px 12px 12px; border-left: 3px solid var(--warn); background: var(--bg-hover); border-radius: 0 6px 6px 0; }
+.st .consent .ask { margin: 10px 0 0; font-size: 13px; font-weight: 600; user-select: text; }
+.st .keyrow { margin-top: 10px; }
+.st .keyrow input, .st .ctl input[type=password] { width: 100%; }
+.st input[type=password] { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px; font: inherit; outline: none; }
+.st input[type=password]:focus { border-color: var(--accent); }
+.st .ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 380px; }
+.st .ctl select { min-width: 140px; max-width: 220px; }
+.st .note.err { color: var(--danger); }
+.st .note.ok { color: var(--ok); }
+.st .env.add { border-style: dashed; }

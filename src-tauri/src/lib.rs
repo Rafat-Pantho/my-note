@@ -1,3 +1,4 @@
+mod ai;
 mod config;
 mod effects;
 mod files;
@@ -58,6 +59,20 @@ fn take_launch_args() -> Vec<String> {
 struct Appearance {
     settings: Settings,
     status: Status,
+    /// Which AI environment is active and whether it is local or remote (status bar). Derived from the
+    /// settings alone: no keychain access, no network.
+    ai: ai::AiStatus,
+}
+
+impl Appearance {
+    fn new(settings: Settings, status: Status) -> Self {
+        let ai = settings.ai.status();
+        Appearance {
+            settings,
+            status,
+            ai,
+        }
+    }
 }
 
 /// Settings plus what the window is really doing. Sync command: runs on the main thread.
@@ -70,7 +85,7 @@ fn get_settings(
     let settings = settings.get();
     let status = effects::apply(&window, &settings, &fx);
     fx.record(&status);
-    Appearance { settings, status }
+    Appearance::new(settings, status)
 }
 
 /// Merges a partial settings object, applies it now and saves it after a short debounce.
@@ -87,7 +102,7 @@ fn set_settings(
     config::schedule_save(&app);
     let status = effects::apply(&window, &settings, &fx);
     fx.record(&status);
-    Appearance { settings, status }
+    Appearance::new(settings, status)
 }
 
 /// Re-checks OS state (transparency toggled, high contrast, theme) and tells the frontend if the result
@@ -103,7 +118,7 @@ fn refresh_appearance(app: &AppHandle) {
     let settings = settings.get();
     let status = effects::apply(&window, &settings, &fx);
     if fx.record(&status) {
-        let _ = window.emit("appearance-changed", Appearance { settings, status });
+        let _ = window.emit("appearance-changed", Appearance::new(settings, status));
     }
 }
 
@@ -116,6 +131,7 @@ pub fn run() {
             let no_effects = std::env::args_os().any(|a| a == "--no-effects");
             app.manage(SettingsState::new(settings.clone()));
             app.manage(EffectsState::new(no_effects));
+            app.manage(ai::AiState::default()); // an empty map: no I/O, no network
             if let Some(window) = app.get_webview_window("main") {
                 let fx = app.state::<EffectsState>();
                 let status = effects::apply(&window, &settings, &fx);
@@ -157,6 +173,21 @@ pub fn run() {
             keychain::key_set,
             keychain::key_delete,
             keychain::key_has,
+            ai::ai_get,
+            ai::ai_enable,
+            ai::ai_disable,
+            ai::ai_add_env,
+            ai::ai_update_env,
+            ai::ai_remove_env,
+            ai::ai_set_active,
+            ai::ai_set_key,
+            ai::ai_clear_key,
+            ai::ai_set_consent,
+            ai::ai_list_models,
+            ai::ai_set_model,
+            ai::ai_stream,
+            ai::ai_cancel,
+            ai::open_ollama_site,
         ])
         .run(tauri::generate_context!())
         .expect("error while running My Note");

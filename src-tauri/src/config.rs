@@ -20,6 +20,7 @@ use tauri::{
     ipc::{InvokeBody, Request, Response},
 };
 
+use crate::ai::AiConfig;
 use crate::effects::Mode;
 use crate::files::{Encoding, LineEnding};
 
@@ -98,6 +99,11 @@ pub struct Settings {
     pub opacity: f64,
     /// Master switch: forces solid and turns off non-essential animation.
     pub reduce_effects: bool,
+    /// AI environments and consent. Not part of the generic settings patch and not sent with the settings
+    /// (the frontend gets `ai::AiStatus` / `ai::AiView` instead): it is written to the file by
+    /// `to_file_bytes` and changed only through the `ai_*` commands.
+    #[serde(skip)]
+    pub ai: AiConfig,
 }
 
 impl Default for Settings {
@@ -114,6 +120,7 @@ impl Default for Settings {
             effects: Mode::Off,
             opacity: DEFAULT_OPACITY,
             reduce_effects: false,
+            ai: AiConfig::default(),
         }
     }
 }
@@ -196,6 +203,7 @@ impl Settings {
     /// The on-disk form: the settings plus the format version.
     pub fn to_file_bytes(&self) -> Result<Vec<u8>, String> {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        v["ai"] = serde_json::to_value(&self.ai).map_err(|e| e.to_string())?;
         v["version"] = CONFIG_VERSION.into();
         serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
     }
@@ -256,6 +264,7 @@ fn settings_from(mut v: serde_json::Value, from: u32) -> (Settings, Loaded) {
     migrate(&mut v, from);
     let mut s = Settings::default();
     s.merge_json(&v);
+    s.ai = AiConfig::from_value(v.get("ai")); // only the file can carry this, never a patch
     let loaded = if from < CONFIG_VERSION {
         Loaded::Migrated { from }
     } else {
@@ -324,6 +333,15 @@ impl SettingsState {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+
+    /// Runs `f` on the settings and marks them unsaved. For changes that do not come from the generic patch
+    /// (the AI commands).
+    pub fn with_mut<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> R {
+        let mut g = self.current.lock().unwrap_or_else(|e| e.into_inner());
+        let r = f(&mut g);
+        self.dirty.store(true, Ordering::SeqCst);
+        r
     }
 
     /// Merges a partial update and marks the state unsaved. Returns the new settings.
@@ -604,6 +622,35 @@ mod tests {
     #[test]
     fn non_utf8_file_is_invalid() {
         assert_recovered(&Scratch::new("bad-utf8"), &[0xff, 0xfe, 0x00, 0x80]);
+    }
+
+    #[test]
+    fn ai_config_is_saved_and_loaded_but_never_patched_in() {
+        use crate::ai::{Consent, Kind};
+        let mut s = Settings::default();
+        assert!(!s.ai.enabled, "AI is off by default");
+        s.ai = AiConfig::from_value(Some(&serde_json::json!({
+            "enabled": true,
+            "environments": [{ "id": "e1", "name": "Ollama", "kind": "ollama",
+                "baseUrl": "http://localhost:11434", "consent": "denied" }]
+        })));
+        // The frontend payload (serialize) does not carry it; the file does.
+        assert!(serde_json::to_value(&s).unwrap().get("ai").is_none());
+        let d = Scratch::new("ai-roundtrip");
+        let path = d.path(CONFIG_FILE);
+        write_settings(&path, &s).unwrap();
+        let (back, _) = load_from(&path, None);
+        assert_eq!(back.ai, s.ai);
+        assert_eq!(back.ai.environments[0].consent, Consent::Denied);
+        assert_eq!(back.ai.environments[0].kind, Kind::Ollama);
+        // A settings patch cannot touch it, even if it tries.
+        let mut t = Settings::default();
+        t.merge_json(&serde_json::json!({
+            "ai": { "enabled": true, "environments": [{ "id": "x", "name": "x", "kind": "ollama",
+                "baseUrl": "http://localhost:11434", "consent": "granted",
+                "consentOrigin": "http://localhost:11434" }] }
+        }));
+        assert_eq!(t.ai, AiConfig::default());
     }
 
     #[test]

@@ -1,3 +1,4 @@
+import type { AiStatus } from "../ai/types";
 import { type MenuItem, showMenu } from "./dialog";
 
 export const ENCODINGS: MenuItem[] = [
@@ -31,6 +32,23 @@ export interface StatusHandlers {
   resetZoom(): void;
   setEncoding(v: string): void;
   setLineEnding(v: string): void;
+  /** The AI indicator was clicked: open Settings > AI. */
+  openAi(): void;
+}
+
+/** Text, badge and tooltip for the AI indicator. Pure, so the wording lives in one place. */
+export function describeAi(ai: AiStatus): { text: string; badge: "local" | "remote" | ""; title: string; state: string } {
+  if (!ai.enabled) return { text: "AI off", badge: "", state: "off", title: "AI is off. Nothing is sent anywhere. Click to set it up." };
+  const e = ai.env;
+  if (!e) return { text: "AI: no environment", badge: "", state: "none", title: "AI is on but no environment is set up. Click to add one." };
+  const where = e.local ? "on this computer" : "on another machine";
+  const allowed = e.ready ? "" : e.consent === "denied" ? " · not allowed" : " · needs permission";
+  return {
+    text: `${e.name} · ${e.model ?? "no model"}${allowed}`,
+    badge: e.local ? "local" : "remote",
+    state: e.ready ? "ready" : "blocked",
+    title: `Active AI environment: ${e.name} at ${e.host} (${where}). Text is sent there only when you run an AI action. Click to open AI settings.`,
+  };
 }
 
 export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
@@ -49,14 +67,30 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
   const wrap = mk("button", "Toggle word wrap (Alt+Z)");
   const enc = mk("button", "Encoding used when saving");
   const eol = mk("button", "Line ending used when saving");
-  host.append(msg, sp, pos, sel, zoom, wrap, enc, eol);
+  const ai = mk("button");
+  ai.className = "ai";
+  const aiText = mk("span");
+  const aiBadge = mk("span");
+  ai.append(aiText, aiBadge);
+  host.append(ai, msg, sp, pos, sel, zoom, wrap, enc, eol);
 
+  ai.onclick = h.openAi;
   zoom.onclick = h.resetZoom;
   wrap.onclick = h.toggleWrap;
   enc.onclick = () => showMenu(enc, ENCODINGS, enc.dataset.v ?? "", h.setEncoding);
   eol.onclick = () => showMenu(eol, LINE_ENDINGS, eol.dataset.v ?? "", h.setLineEnding);
 
   return {
+    /** Active AI environment and whether it is local or remote. */
+    setAi(status: AiStatus): void {
+      const d = describeAi(status);
+      aiText.textContent = d.text;
+      aiBadge.textContent = d.badge === "local" ? "Local" : d.badge === "remote" ? "Remote" : "";
+      aiBadge.className = `badge ${d.badge}`;
+      aiBadge.hidden = !d.badge;
+      ai.dataset.state = d.state;
+      ai.title = d.title;
+    },
     /** Transient text on the left, e.g. "Opening file...". */
     message(text: string): void {
       msg.textContent = text;

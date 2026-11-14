@@ -37,7 +37,13 @@ function describeEffects(a: Appearance): string {
   return `Now: ${now}.${why} Blur: ${blur}. Transparency: ${trans}.`;
 }
 
-export function mountSettings(host: HTMLElement): () => void {
+export interface SettingsPanel {
+  dispose(): void;
+  /** Switches to a section ("general", "appearance", "ai"); unknown ids are ignored. */
+  show(section: string): void;
+}
+
+export function mountSettings(host: HTMLElement): SettingsPanel {
   const syncs: Sync[] = [];
   const save = (patch: Partial<Settings>) => setAppearance(patch).catch(() => appearance());
 
@@ -148,6 +154,19 @@ export function mountSettings(host: HTMLElement): () => void {
   const effectsNote = el("p", "note");
   syncs.push((a) => (effectsNote.textContent = describeEffects(a)));
 
+  // The AI section is its own lazy chunk, fetched the first time the section is shown (never at startup).
+  const aiHost = el("div");
+  let aiRequested = false;
+  let disposeAi: (() => void) | null = null;
+  let torn = false;
+  const loadAi = () => {
+    if (aiRequested) return;
+    aiRequested = true;
+    void import("../ai/settings").then((m) => {
+      if (!torn) disposeAi = m.mountAi(aiHost);
+    });
+  };
+
   const panels: Record<(typeof SECTIONS)[number][0], HTMLElement> = {
     general: section(
       "General",
@@ -174,10 +193,7 @@ export function mountSettings(host: HTMLElement): () => void {
       row("Reduce effects", checkbox("reduceEffects"), "Solid background, no animation"),
       effectsNote,
     ),
-    ai: section(
-      "AI",
-      el("p", "note", "AI is off. Nothing is sent anywhere. AI setup will appear here in a later update."),
-    ),
+    ai: section("AI", aiHost),
   };
 
   const nav = el("nav", "st-nav");
@@ -186,6 +202,7 @@ export function mountSettings(host: HTMLElement): () => void {
   const show = (id: keyof typeof panels) => {
     for (const [k, p] of Object.entries(panels)) p.hidden = k !== id;
     for (const [k, b] of buttons) b.classList.toggle("on", k === id);
+    if (id === "ai") loadAi();
   };
   for (const [id, label] of SECTIONS) {
     const b = el("button", "", label);
@@ -205,8 +222,15 @@ export function mountSettings(host: HTMLElement): () => void {
   if (current) refresh(current);
   const off = onAppearance(refresh);
 
-  return () => {
-    off();
-    host.replaceChildren();
+  return {
+    show(section) {
+      if (section in panels) show(section as keyof typeof panels);
+    },
+    dispose() {
+      torn = true;
+      disposeAi?.();
+      off();
+      host.replaceChildren();
+    },
   };
 }

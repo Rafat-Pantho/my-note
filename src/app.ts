@@ -8,6 +8,7 @@ import {
   setTitle, showWindow, takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
+import type { SettingsPanel } from "./settings/panel";
 import { type Tab, TabBar } from "./tabs/tabs";
 import { type Appearance, appearance, loadAppearance, onAppearance, setAppearance } from "./theme/appearance";
 
@@ -24,7 +25,7 @@ let prefs: Prefs = { wrap: true, zoom: 100 };
 /** Last real document tab, so the saved session still knows the active file while Settings is shown. */
 let lastDoc: Tab | undefined;
 let settingsTab: Tab | null = null;
-let disposeSettings: (() => void) | null = null;
+let settingsPanel: SettingsPanel | null = null;
 // What the editor currently uses, to apply only real changes (a slider fires many updates).
 let appliedTab = 8;
 let appliedSize = 14;
@@ -51,7 +52,10 @@ const status = createStatusBar(document.getElementById("statusbar")!, {
     status.set({ lineEnding: v });
     markDirty();
   },
+  openAi: () => void openSettings("ai"),
 });
+
+status.setAi({ enabled: false, env: null }); // until settings arrive from Rust
 
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 const samePath = (a: string, b: string) => a.toLowerCase() === b.toLowerCase(); // Windows paths
@@ -149,17 +153,18 @@ async function activate(tab: Tab): Promise<void> {
 }
 
 /** One Settings tab. Its code is a lazy chunk, fetched the first time it is opened. */
-async function openSettings() {
+async function openSettings(section?: string) {
   if (!settingsTab || !tabs.includes(settingsTab)) {
     const { mountSettings } = await import("./settings/panel");
     if (!settingsTab || !tabs.includes(settingsTab)) {
       // (a second call during the import may have created it already)
       settingsTab = makeTab({ name: "Settings", kind: "settings" });
-      disposeSettings = mountSettings(document.getElementById("settings")!);
+      settingsPanel = mountSettings(document.getElementById("settings")!);
       tabs.push(settingsTab);
     }
   }
   await activate(settingsTab);
+  if (section) settingsPanel?.show(section);
 }
 
 function newTab() {
@@ -173,8 +178,8 @@ async function closeTab(tab: Tab): Promise<boolean> {
   const i = tabs.indexOf(tab);
   tabs.splice(i, 1);
   if (tab === settingsTab) {
-    disposeSettings?.();
-    disposeSettings = null;
+    settingsPanel?.dispose();
+    settingsPanel = null;
     settingsTab = null;
   }
   if (!tabs.length) tabs.push(makeTab({ text: "" }));
@@ -351,7 +356,8 @@ function toggleWrap() {
 }
 
 /** Live-applies editor settings (wrap, tab size, font) to the view and every open tab. */
-function applySettings({ settings: s }: Appearance) {
+function applySettings({ settings: s, ai }: Appearance) {
+  status.setAi(ai);
   if (s.wordWrap !== prefs.wrap || s.tabSize !== appliedTab) {
     prefs.wrap = s.wordWrap;
     appliedTab = s.tabSize;

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { AiStatus } from "../ai/types";
 
 /** Mirrors Rust `config::Settings` and `effects::Status`. Rust validates; this only displays and applies. */
 export interface Settings {
@@ -32,6 +33,8 @@ export interface EffectStatus {
 export interface Appearance {
   settings: Settings;
   status: EffectStatus;
+  /** Active AI environment and local/remote, for the status bar. Rust derives it from the settings alone. */
+  ai: AiStatus;
 }
 
 let current: Appearance | null = null;
@@ -67,6 +70,11 @@ export async function loadAppearance(): Promise<void> {
   } catch {
     /* solid default */
   }
+}
+
+/** Pushes a new AI status (after any AI settings change) to everything that listens, e.g. the status bar. */
+export function setAiStatus(ai: AiStatus): void {
+  if (current) applyAppearance({ ...current, ai });
 }
 
 export async function setAppearance(patch: Partial<Settings>): Promise<Appearance> {
