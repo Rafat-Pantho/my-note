@@ -36,6 +36,9 @@ export const setConsent = (id: string, granted: boolean, allowInsecure = false) 
 export const listModels = (id: string) => view(invoke<AiView>("ai_list_models", { id }));
 export const setModel = (id: string, model: string | null) =>
   view(invoke<AiView>("ai_set_model", { id, model }));
+export const savePreset = (id: string | null, name: string, instruction: string) =>
+  view(invoke<AiView>("ai_save_preset", { id, name, instruction }));
+export const deletePreset = (id: string) => view(invoke<AiView>("ai_delete_preset", { id }));
 export const openOllamaSite = () => invoke<void>("open_ollama_site");
 
 let counter = 0;
@@ -48,11 +51,11 @@ export function streamChat(
   requestId: string,
   messages: ChatMessage[],
   onEvent: (e: StreamEvent) => void,
-  maxTokens?: number,
+  opts: { maxTokens?: number; numCtx?: number } = {},
 ): Promise<void> {
   const channel = new Channel<StreamEvent>();
   channel.onmessage = onEvent;
-  return invoke<void>("ai_stream", { id, requestId, messages, maxTokens, onEvent: channel });
+  return invoke<void>("ai_stream", { id, requestId, messages, ...opts, onEvent: channel });
 }
 
 /** Aborts a running stream; Rust drops the request, which closes the connection. */

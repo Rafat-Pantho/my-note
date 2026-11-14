@@ -10,6 +10,8 @@ use super::Kind;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Item {
     Text(String),
+    /// The model stopped because it hit its output limit: the text so far is incomplete. Comes before `Done`.
+    Truncated,
     Done,
     Error(String),
 }
@@ -135,6 +137,9 @@ fn ollama_line(payload: &str) -> Vec<Item> {
             .unwrap_or(""),
     );
     if v.get("done").and_then(Value::as_bool) == Some(true) {
+        if v.get("done_reason").and_then(Value::as_str) == Some("length") {
+            out.push(Item::Truncated);
+        }
         out.push(Item::Done);
     }
     out
@@ -152,6 +157,7 @@ fn openai_event(payload: &str) -> Vec<Item> {
     }
     let mut out = Vec::new();
     let mut finished = false;
+    let mut cut = false;
     // `choices` can be empty (a trailing usage chunk) and `content` can be null (role-only first chunk).
     for c in v
         .get("choices")
@@ -165,6 +171,10 @@ fn openai_event(payload: &str) -> Vec<Item> {
                 .unwrap_or(""),
         ));
         finished |= c.get("finish_reason").is_some_and(|f| !f.is_null());
+        cut |= c.get("finish_reason").and_then(Value::as_str) == Some("length");
+    }
+    if cut {
+        out.push(Item::Truncated);
     }
     if finished {
         out.push(Item::Done);
@@ -185,11 +195,18 @@ fn anthropic_event(payload: &str) -> Vec<Item> {
             }
             .unwrap_or(""),
         ),
+        Some("message_delta") => {
+            if v.pointer("/delta/stop_reason").and_then(Value::as_str) == Some("max_tokens") {
+                vec![Item::Truncated]
+            } else {
+                Vec::new()
+            }
+        }
         Some("message_stop") => vec![Item::Done],
         Some("error") => vec![Item::Error(
             error_message(&v).unwrap_or_else(|| "The API reported an error.".into()),
         )],
-        _ => Vec::new(), // message_start, ping, content_block_start/stop, message_delta
+        _ => Vec::new(), // message_start, ping, content_block_start/stop
     }
 }
 
@@ -234,6 +251,9 @@ fn gemini_event(payload: &str) -> Vec<Item> {
             if p.get("thought").and_then(Value::as_bool) != Some(true) {
                 out.extend(text(p.get("text").and_then(Value::as_str).unwrap_or("")));
             }
+        }
+        if c.get("finishReason").and_then(Value::as_str) == Some("MAX_TOKENS") {
+            out.push(Item::Truncated);
         }
         if let Some(r) = c.get("finishReason").and_then(Value::as_str)
             && GEMINI_BLOCKED.contains(&r)
@@ -453,6 +473,57 @@ mod tests {
         assert_eq!(
             run(Kind::Gemini, err, 100).1,
             vec![Item::Error("API key not valid.".into())]
+        );
+    }
+
+    #[test]
+    fn output_limit_is_reported_as_truncated_for_every_format() {
+        let cases: [(Kind, &str); 4] = [
+            (
+                Kind::Ollama,
+                "{\"message\":{\"content\":\"a\"},\"done\":false}
+{\"message\":{\"content\":\"\"},\"done\":true,\"done_reason\":\"length\"}
+",
+            ),
+            (
+                Kind::OpenaiCompatible,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}
+
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}
+
+data: [DONE]
+
+",
+            ),
+            (
+                Kind::Anthropic,
+                "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"a\"}}
+
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"}}
+
+data: {\"type\":\"message_stop\"}
+
+",
+            ),
+            (
+                Kind::Gemini,
+                "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"a\"}]},\"finishReason\":\"MAX_TOKENS\"}]}
+
+",
+            ),
+        ];
+        for (kind, input) in cases {
+            let (text, items) = run(kind, input, 5);
+            assert_eq!(text, "a", "{kind:?}");
+            assert!(items.contains(&Item::Truncated), "{kind:?}: {items:?}");
+            assert_eq!(items.last(), Some(&Item::Done), "{kind:?}");
+        }
+        // A normal finish is not reported as truncated.
+        assert!(!run(Kind::Ollama, OLLAMA, 9).1.contains(&Item::Truncated));
+        assert!(
+            !run(Kind::Anthropic, ANTHROPIC, 9)
+                .1
+                .contains(&Item::Truncated)
         );
     }
 

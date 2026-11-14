@@ -29,3 +29,10 @@
 .st .note.err { color: var(--danger); }
 .st .note.ok { color: var(--ok); }
 .st .env.add { border-style: dashed; }
+
+.st .presets { margin-top: 28px; }
+.st .presets h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.st .presets .env { padding-top: 14px; }
+.st textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; resize: vertical; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; outline: none; }
+.st textarea:focus { border-color: var(--accent); }

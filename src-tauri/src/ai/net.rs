@@ -114,14 +114,34 @@ fn plain_model_id(m: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
+/// Per-request knobs. Only used by the providers they apply to.
+#[derive(Clone, Copy, Debug)]
+pub struct ChatOptions {
+    /// Output limit. Required by Anthropic; ignored by the others (their server default applies).
+    pub max_tokens: u32,
+    /// Ollama only: context window size (`options.num_ctx`). Without it Ollama uses its own default, which
+    /// depends on version and VRAM and can be as small as 2048 tokens, so long text would be cut silently.
+    pub num_ctx: Option<u32>,
+}
+
+impl Default for ChatOptions {
+    fn default() -> Self {
+        ChatOptions {
+            max_tokens: DEFAULT_MAX_TOKENS,
+            num_ctx: None,
+        }
+    }
+}
+
 pub fn chat_request(
     kind: Kind,
     base: &str,
     model: &str,
     messages: &[ChatMessage],
-    max_tokens: u32,
+    opts: ChatOptions,
     key: Option<&str>,
 ) -> Result<Prepared, String> {
+    let max_tokens = opts.max_tokens;
     if messages.is_empty() {
         return Err("There is nothing to send.".into());
     }
@@ -137,10 +157,13 @@ pub fn chat_request(
             .collect()
     };
     let (path, body) = match kind {
-        Kind::Ollama => (
-            "/api/chat".to_string(),
-            json!({ "model": model, "messages": plain(), "stream": true }),
-        ),
+        Kind::Ollama => {
+            let mut b = json!({ "model": model, "messages": plain(), "stream": true });
+            if let Some(n) = opts.num_ctx {
+                b["options"] = json!({ "num_ctx": n });
+            }
+            ("/api/chat".to_string(), b)
+        }
         Kind::OpenaiCompatible => (
             "/chat/completions".to_string(),
             json!({ "model": model, "messages": plain(), "stream": true }),
@@ -350,12 +373,19 @@ pub async fn list_models(p: &Permit) -> Result<Vec<String>, String> {
 
 /// Streams a reply. `on_text` gets each piece of text and returns false to stop early. Dropping this future
 /// (task abort) drops the response, which closes the connection and so stops the server's work too.
+/// How a stream that ended without an error ended.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Finish {
+    /// The model hit its output limit: the text received is incomplete.
+    pub truncated: bool,
+}
+
 pub async fn stream_chat(
     p: &Permit,
     messages: &[ChatMessage],
-    max_tokens: Option<u32>,
+    opts: ChatOptions,
     mut on_text: impl FnMut(String) -> bool,
-) -> Result<(), String> {
+) -> Result<Finish, String> {
     let model = p
         .env
         .model
@@ -366,7 +396,7 @@ pub async fn stream_chat(
         &p.env.base_url,
         model,
         messages,
-        max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+        opts,
         p.key.as_deref(),
     )?;
     let mut resp = send(p, req, None).await?;
@@ -376,6 +406,7 @@ pub async fn stream_chat(
         return Err(status_error(status, &body, &p.host()));
     }
     let mut parser = StreamParser::new(p.env.kind);
+    let mut finish = Finish::default();
     loop {
         let chunk = resp
             .chunk()
@@ -390,16 +421,17 @@ pub async fn stream_chat(
             match item {
                 Item::Text(t) => {
                     if !on_text(t) {
-                        return Ok(());
+                        return Ok(finish);
                     }
                 }
-                Item::Done => return Ok(()),
+                Item::Truncated => finish.truncated = true,
+                Item::Done => return Ok(finish),
                 Item::Error(m) => return Err(m),
             }
         }
         if eof {
             // `finish` always ends with Done or Error, so this is unreachable in practice.
-            return Ok(());
+            return Ok(finish);
         }
     }
 }
@@ -407,6 +439,13 @@ pub async fn stream_chat(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn opts(max_tokens: u32) -> ChatOptions {
+        ChatOptions {
+            max_tokens,
+            num_ctx: None,
+        }
+    }
 
     fn msgs() -> Vec<ChatMessage> {
         vec![
@@ -480,7 +519,7 @@ mod tests {
             "http://localhost:11434",
             "llama3.2",
             &msgs(),
-            100,
+            opts(100),
             None,
         )
         .unwrap();
@@ -498,7 +537,7 @@ mod tests {
             "http://localhost:1234/v1",
             "m",
             &msgs(),
-            100,
+            opts(100),
             None,
         )
         .unwrap();
@@ -511,13 +550,50 @@ mod tests {
     }
 
     #[test]
+    fn ollama_context_size_is_sent_only_when_asked() {
+        let ask = |num_ctx| {
+            let o = ChatOptions {
+                max_tokens: 1,
+                num_ctx,
+            };
+            let r = chat_request(
+                Kind::Ollama,
+                "http://localhost:11434",
+                "m",
+                &msgs(),
+                o,
+                None,
+            )
+            .unwrap();
+            body(&r)
+        };
+        assert!(ask(None).get("options").is_none());
+        assert_eq!(ask(Some(8192))["options"]["num_ctx"], 8192);
+        // Other providers have no such field.
+        let o = ChatOptions {
+            max_tokens: 1,
+            num_ctx: Some(8192),
+        };
+        let r = chat_request(
+            Kind::OpenaiCompatible,
+            "http://localhost:1234/v1",
+            "m",
+            &msgs(),
+            o,
+            None,
+        )
+        .unwrap();
+        assert!(body(&r).get("options").is_none());
+    }
+
+    #[test]
     fn anthropic_chat_body_moves_system_out() {
         let r = chat_request(
             Kind::Anthropic,
             "https://api.anthropic.com",
             "claude-x",
             &msgs(),
-            777,
+            opts(777),
             Some("k"),
         )
         .unwrap();
@@ -542,7 +618,7 @@ mod tests {
             "https://g.test/v1beta",
             "gemini-2.0-flash",
             &msgs(),
-            1,
+            opts(1),
             Some("k"),
         )
         .unwrap();
@@ -556,13 +632,33 @@ mod tests {
         assert_eq!(b["contents"][1]["role"], "model");
         assert_eq!(b["contents"][2]["parts"][0]["text"], "Bye");
         // A model name that could break out of the path is refused.
-        assert!(chat_request(Kind::Gemini, "https://g.test", "a/../b", &msgs(), 1, None).is_err());
-        assert!(chat_request(Kind::Gemini, "https://g.test", "a?x=1", &msgs(), 1, None).is_err());
+        assert!(
+            chat_request(
+                Kind::Gemini,
+                "https://g.test",
+                "a/../b",
+                &msgs(),
+                opts(1),
+                None
+            )
+            .is_err()
+        );
+        assert!(
+            chat_request(
+                Kind::Gemini,
+                "https://g.test",
+                "a?x=1",
+                &msgs(),
+                opts(1),
+                None
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn empty_conversation_is_refused() {
-        assert!(chat_request(Kind::Ollama, "http://localhost:1", "m", &[], 1, None).is_err());
+        assert!(chat_request(Kind::Ollama, "http://localhost:1", "m", &[], opts(1), None).is_err());
         let only_system = [ChatMessage {
             role: Role::System,
             content: "x".into(),
@@ -573,7 +669,7 @@ mod tests {
                 "https://a.test",
                 "m",
                 &only_system,
-                1,
+                opts(1),
                 None
             )
             .is_err()

@@ -109,6 +109,44 @@ pub struct AiConfig {
     pub active: Option<String>,
     #[serde(default)]
     pub environments: Vec<Environment>,
+    /// The user's own AI actions (name + instruction), shown in the AI menu.
+    #[serde(default)]
+    pub presets: Vec<Preset>,
+}
+
+/// A saved custom action. The instruction is sent to the model like the built-in ones.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Preset {
+    pub id: String,
+    pub name: String,
+    pub instruction: String,
+}
+
+const MAX_PRESETS: usize = 30;
+const MAX_PRESET_NAME_CHARS: usize = 60;
+const MAX_PRESET_INSTRUCTION_CHARS: usize = 2000;
+
+/// Trims and checks a preset; the error is shown to the user.
+fn clean_preset_fields(name: &str, instruction: &str) -> Result<(String, String), String> {
+    let name: String = name.trim().chars().filter(|c| !c.is_control()).collect();
+    let instruction = instruction.trim().to_string();
+    if name.is_empty() {
+        return Err("Give the preset a name.".into());
+    }
+    if name.chars().count() > MAX_PRESET_NAME_CHARS {
+        return Err(format!(
+            "The name is too long (limit {MAX_PRESET_NAME_CHARS} characters)."
+        ));
+    }
+    if instruction.is_empty() {
+        return Err("Write the instruction the preset should send.".into());
+    }
+    if instruction.chars().count() > MAX_PRESET_INSTRUCTION_CHARS {
+        return Err(format!(
+            "The instruction is too long (limit {MAX_PRESET_INSTRUCTION_CHARS} characters)."
+        ));
+    }
+    Ok((name, instruction))
 }
 
 /* ---------- URLs ---------- */
@@ -305,12 +343,75 @@ impl AiConfig {
             }
             cfg.environments.push(e);
         }
+        for raw in v
+            .get("presets")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Ok(p) = serde_json::from_value::<Preset>(raw.clone()) else {
+                continue;
+            };
+            let Ok((name, instruction)) = clean_preset_fields(&p.name, &p.instruction) else {
+                continue;
+            };
+            if valid_env_id(&p.id)
+                && cfg.presets.iter().all(|x| x.id != p.id)
+                && cfg.presets.len() < MAX_PRESETS
+            {
+                cfg.presets.push(Preset {
+                    id: p.id,
+                    name,
+                    instruction,
+                });
+            }
+        }
         cfg.active = v
             .get("active")
             .and_then(Value::as_str)
             .filter(|id| cfg.env(id).is_some())
             .map(str::to_string);
         cfg
+    }
+
+    /// Adds a preset, or replaces the one with `id`.
+    fn save_preset(
+        &mut self,
+        id: Option<&str>,
+        name: &str,
+        instruction: &str,
+    ) -> Result<(), String> {
+        let (name, instruction) = clean_preset_fields(name, instruction)?;
+        match id {
+            Some(id) => {
+                let p = self
+                    .presets
+                    .iter_mut()
+                    .find(|p| p.id == id)
+                    .ok_or("That preset no longer exists.")?;
+                p.name = name;
+                p.instruction = instruction;
+            }
+            None => {
+                if self.presets.len() >= MAX_PRESETS {
+                    return Err("There are too many presets. Delete one first.".into());
+                }
+                let mut n = now_secs() * 1000 + self.presets.len() as u64;
+                let id = loop {
+                    let id = format!("p{n:x}");
+                    if self.presets.iter().all(|p| p.id != id) {
+                        break id;
+                    }
+                    n += 1;
+                };
+                self.presets.push(Preset {
+                    id,
+                    name,
+                    instruction,
+                });
+            }
+        }
+        Ok(())
     }
 
     fn unique_id(&self) -> String {
@@ -406,6 +507,7 @@ pub struct AiView {
     enabled: bool,
     active: Option<String>,
     environments: Vec<EnvView>,
+    presets: Vec<Preset>,
     status: AiStatus,
 }
 
@@ -414,6 +516,7 @@ fn view_of(cfg: &AiConfig) -> AiView {
         enabled: cfg.enabled,
         active: cfg.active.clone(),
         environments: cfg.environments.iter().map(Environment::view).collect(),
+        presets: cfg.presets.clone(),
         status: cfg.status(),
     }
 }
@@ -761,10 +864,17 @@ pub fn ai_set_model(app: AppHandle, id: String, model: Option<String>) -> Result
 #[derive(Clone, Serialize)]
 #[serde(tag = "event", rename_all = "camelCase")]
 pub enum StreamEvent {
-    Chunk { text: String },
-    Done,
+    Chunk {
+        text: String,
+    },
+    /// `truncated`: the model stopped at its output limit, so the text is incomplete.
+    Done {
+        truncated: bool,
+    },
     Cancelled,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 fn valid_request_id(id: &str) -> bool {
@@ -784,16 +894,24 @@ pub async fn ai_stream(
     request_id: String,
     messages: Vec<ChatMessage>,
     max_tokens: Option<u32>,
+    num_ctx: Option<u32>,
     on_event: Channel<StreamEvent>,
 ) -> Result<(), String> {
     if !valid_request_id(&request_id) {
         return Err("invalid request id".into());
     }
     let permit = permit(&snapshot(&app), &id, keychain::get)?;
+    let opts = net::ChatOptions {
+        max_tokens: max_tokens
+            .unwrap_or(net::DEFAULT_MAX_TOKENS)
+            .clamp(1, 200_000),
+        // Only Ollama reads it; keep it within what a desktop can plausibly load.
+        num_ctx: num_ctx.map(|n| n.clamp(512, 131_072)),
+    };
 
     let events = on_event.clone();
     let task = tauri::async_runtime::spawn(async move {
-        net::stream_chat(&permit, &messages, max_tokens, |text| {
+        net::stream_chat(&permit, &messages, opts, |text| {
             events.send(StreamEvent::Chunk { text }).is_ok()
         })
         .await
@@ -814,7 +932,9 @@ pub async fn ai_stream(
     let outcome = task.await;
     app.state::<AiState>().lock().remove(&request_id);
     let last = match outcome {
-        Ok(Ok(())) => StreamEvent::Done,
+        Ok(Ok(finish)) => StreamEvent::Done {
+            truncated: finish.truncated,
+        },
         Ok(Err(message)) => StreamEvent::Error { message },
         Err(_) => StreamEvent::Cancelled,
     };
@@ -834,6 +954,25 @@ pub fn ai_cancel(state: State<AiState>, request_id: String) {
         streams.retain(|_, s| matches!(s, Slot::Running(_))); // stale early-cancel markers
     }
     streams.insert(request_id, Slot::Cancelled);
+}
+
+/// Adds or edits a saved preset (a custom AI action: name + instruction).
+#[tauri::command]
+pub fn ai_save_preset(
+    app: AppHandle,
+    id: Option<String>,
+    name: String,
+    instruction: String,
+) -> Result<AiView, String> {
+    mutate(&app, |c| c.save_preset(id.as_deref(), &name, &instruction))
+}
+
+#[tauri::command]
+pub fn ai_delete_preset(app: AppHandle, id: String) -> Result<AiView, String> {
+    mutate(&app, |c| {
+        c.presets.retain(|p| p.id != id);
+        Ok(())
+    })
 }
 
 /// Opens https://ollama.com in the default browser. One fixed address, run only when the user clicks the

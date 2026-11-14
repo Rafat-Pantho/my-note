@@ -241,7 +241,7 @@ export function mountAi(host: HTMLElement): () => void {
         }
       };
       api
-        .streamChat(e.id, requestId, [{ role: "user", content: "Reply with the single word: ok" }], onEvent, 16)
+        .streamChat(e.id, requestId, [{ role: "user", content: "Reply with the single word: ok" }], onEvent, { maxTokens: 16 })
         .catch(reject);
     });
     const ms = Math.round(performance.now() - started);
@@ -394,6 +394,69 @@ export function mountAi(host: HTMLElement): () => void {
     return f;
   }
 
+  /* ---------- saved presets (custom AI actions) ---------- */
+
+  let addingPreset = false;
+
+  function presetCard(id: string | null, name0: string, instruction0: string): HTMLElement {
+    const key = `preset:${id ?? "new"}`;
+    const c = el("div", `env${id ? "" : " add"}`);
+    const name = el("input", "wide");
+    name.type = "text";
+    name.placeholder = "Name, for example Make it a haiku";
+    name.value = name0;
+    name.maxLength = 60;
+    name.setAttribute("aria-label", "Preset name");
+    const text = el("textarea");
+    text.placeholder = "Instruction sent with the text, for example: Rewrite this as a haiku.";
+    text.value = instruction0;
+    text.rows = 3;
+    text.maxLength = 2000;
+    text.setAttribute("aria-label", "Preset instruction");
+    const locked = busy.has(key);
+    const actions = el("div", "actions");
+    const save = button(id ? "Save" : "Add preset", () => {
+      void run(key, async () => {
+        const v = await api.savePreset(id, name.value, text.value);
+        if (!id) addingPreset = false;
+        return v;
+      });
+    }, "btn primary");
+    save.disabled = locked;
+    actions.append(save);
+    if (id) {
+      const del = button("Delete", () => void run(key, () => api.deletePreset(id)));
+      del.disabled = locked;
+      actions.append(del);
+    } else {
+      actions.append(button("Cancel", () => { addingPreset = false; notes.delete(key); render(); }));
+    }
+    c.append(name, text, actions);
+    const note = notes.get(key);
+    if (note) c.append(el("p", `note ${note.err ? "err" : "ok"}`, note.text));
+    return c;
+  }
+
+  function presetsSection(v: AiView): HTMLElement {
+    const s = el("div", "presets");
+    s.append(el("h3", "", "Your AI actions"));
+    s.append(
+      el(
+        "p",
+        "note",
+        "Saved prompts that appear in the AI menu (button, right-click, Ctrl+I). Each sends your instruction together with the selected text, or the whole file when nothing is selected. The result is shown in a preview first.",
+      ),
+    );
+    for (const p of v.presets) s.append(presetCard(p.id, p.name, p.instruction));
+    if (addingPreset) s.append(presetCard(null, "", ""));
+    else {
+      const a = el("div", "actions");
+      a.append(button("New preset...", () => { addingPreset = true; render(); }));
+      s.append(a);
+    }
+    return s;
+  }
+
   /* ---------- section ---------- */
 
   function render() {
@@ -432,6 +495,7 @@ export function mountAi(host: HTMLElement): () => void {
       root.append(a);
       const n = notes.get("");
       if (n) root.append(el("p", `note ${n.err ? "err" : "ok"}`, n.text));
+      root.append(presetsSection(v));
       return;
     }
 
@@ -485,6 +549,7 @@ export function mountAi(host: HTMLElement): () => void {
     }
     const n = notes.get("");
     if (n && !adding) root.append(el("p", `note ${n.err ? "err" : "ok"}`, n.text));
+    root.append(presetsSection(v));
   }
 
   render();

@@ -1,0 +1,73 @@
+/* AI actions: popup menu, preview panel, rollback panel (lazy chunk, loaded with ai/controller.ts).
+   Always opaque (var(--bg-pop)) like the other popups, so text stays readable over any effect. */
+
+/* ---------- popup menu ---------- */
+.aimenu { position: fixed; z-index: 30; width: 340px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto;
+  background: var(--bg-pop); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px;
+  box-shadow: 0 8px 24px var(--shadow); animation: pop var(--dur) ease-out; font-size: 12px; }
+.aimenu button, .aimenu select, .aimenu input { font: inherit; }
+.aim-scope { padding: 4px 8px 6px; color: var(--fg-dim); border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.aim-scope strong { color: var(--fg); font-weight: 600; }
+.aim-blocked { margin: 4px 2px 6px; padding: 8px 10px; border-left: 3px solid var(--warn); background: var(--bg-hover); border-radius: 0 6px 6px 0; }
+.aim-blocked p { margin: 0 0 6px; line-height: 1.4; }
+.aim-link { padding: 0; color: var(--accent); text-decoration: underline; }
+.aim-row { display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 5px; }
+.aim-row:hover:not(:disabled), .aim-mini:hover:not(:disabled) { background: var(--bg-hover-strong); }
+.aim-row:focus-visible, .aim-mini:focus-visible { outline: 1px solid var(--accent); }
+.aim-row:disabled, .aim-mini:disabled { color: var(--fg-dim); opacity: 0.55; cursor: default; }
+.aim-inline { display: flex; align-items: center; gap: 6px; padding: 3px 8px; }
+.aim-lbl { flex: none; min-width: 84px; }
+.aim-mini { padding: 3px 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-hover); }
+.aim-inline select, .aim-inline input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 6px; outline: none; }
+.aim-inline select:focus, .aim-inline input:focus { border-color: var(--accent); }
+.aim-inline select:disabled, .aim-inline input:disabled { opacity: 0.55; }
+.aim-custom { padding-top: 5px; }
+.aim-sep { margin: 6px 8px 2px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 11px; }
+.aim-sep:empty { padding: 0; margin-bottom: 4px; }
+
+/* ---------- preview / rollback panel ---------- */
+#aipanel { flex: none; display: flex; flex-direction: column; height: min(44vh, 380px); min-height: 160px;
+  background: var(--bg-pop); border-top: 1px solid var(--border); font-size: 12px; user-select: text; }
+#aipanel[hidden] { display: none; }
+.aip-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex: none; flex-wrap: wrap; }
+.aip-title { font-size: 13px; }
+.aip-badge { padding: 0 8px; border-radius: 9px; line-height: 17px; border: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.aip-badge.local { color: var(--ok); border-color: currentColor; }
+.aip-badge.remote { color: var(--warn); border-color: currentColor; }
+.aip-spacer { flex: 1; }
+.aip-tab { padding: 2px 10px; border-radius: 6px; color: var(--fg-dim); }
+.aip-tab:hover { background: var(--bg-hover); color: var(--fg); }
+.aip-tab.on { background: var(--bg-hover-strong); color: var(--fg); }
+.aip-x { width: 24px; height: 24px; border-radius: 50%; font-size: 16px; line-height: 20px; color: var(--fg-dim); }
+.aip-x:hover { background: var(--bg-hover-strong); color: var(--fg); }
+.aip-status { flex: none; padding: 4px 10px; color: var(--fg-dim); line-height: 1.4; }
+.aip-status.warn { color: var(--warn); }
+.aip-status.err { color: var(--danger); }
+.aip-status[hidden] { display: none; }
+.aip-body { flex: 1; min-height: 0; overflow: auto; margin: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.aip-body.split { display: flex; overflow: hidden; }
+.aip-text, .aip-diff-text { margin: 0; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: var(--editor-font) / 1.5 var(--mono-user, var(--mono-font)); font-size: 13px; color: var(--fg); }
+.aip-text[hidden], .aip-diff[hidden] { display: none; }
+.aip-diff ins { text-decoration: none; background: color-mix(in srgb, var(--ok) 28%, transparent); border-radius: 2px; }
+.aip-diff del { background: color-mix(in srgb, var(--danger) 26%, transparent); text-decoration: line-through; border-radius: 2px; }
+.aip-summary { padding: 6px 10px 0; color: var(--fg-dim); }
+.aip-note { margin: 0; padding: 10px; color: var(--fg-dim); }
+.aip-foot { display: flex; gap: 8px; padding: 8px 10px; flex: none; flex-wrap: wrap; }
+.aip-btn { padding: 4px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-hover); transition: background var(--dur); }
+.aip-btn:hover:not(:disabled) { background: var(--bg-hover-strong); }
+.aip-btn:disabled { opacity: 0.5; cursor: default; }
+.aip-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.aip-btn.primary:hover { filter: brightness(1.1); background: var(--accent); }
+.aip-btn:focus-visible, .aip-tab:focus-visible, .aip-item:focus-visible, .aip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* rollback list */
+.aip-list { flex: none; width: 230px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; }
+.aip-item { display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 5px; }
+.aip-item:hover { background: var(--bg-hover); }
+.aip-item.on { background: var(--bg-hover-strong); }
+.aip-item-t { display: block; }
+.aip-item-s { display: block; margin-top: 1px; font-size: 11px; color: var(--fg-dim); }
+.aip-detail { flex: 1; min-width: 0; overflow: auto; }

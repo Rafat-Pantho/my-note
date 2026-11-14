@@ -1,6 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { applyZoom, createEditor, makeState, setFont, setPrefs, setUpdateHandler, withPrefs } from "./editor/editor";
+import type { AiController } from "./ai/controller";
+import { editorItems, showContextMenu } from "./editor/contextmenu";
 import { modal } from "./editor/dialog";
 import { createStatusBar } from "./editor/statusbar";
 import {
@@ -26,6 +28,8 @@ let prefs: Prefs = { wrap: true, zoom: 100 };
 let lastDoc: Tab | undefined;
 let settingsTab: Tab | null = null;
 let settingsPanel: SettingsPanel | null = null;
+/** The AI actions controller. Its code is a lazy chunk: null until the user first opens the AI menu. */
+let aiCtl: AiController | null = null;
 // What the editor currently uses, to apply only real changes (a slider fires many updates).
 let appliedTab = 8;
 let appliedSize = 14;
@@ -118,6 +122,7 @@ function markDirty() {
 function onUpdate(u: ViewUpdate) {
   if (!active) return;
   active.state = u.state;
+  aiCtl?.onUpdate(u);
   if (u.docChanged) {
     if (!active.dirty) markDirty();
     else scheduleSession();
@@ -145,6 +150,7 @@ async function activate(tab: Tab): Promise<void> {
     lastDoc = tab;
     view.setState(tab.state!);
   }
+  aiCtl?.onTabChange(tab);
   document.getElementById("app")!.classList.toggle("on-settings", isSettings);
   document.getElementById("settings")!.hidden = !isSettings;
   refreshAll();
@@ -349,6 +355,57 @@ async function closeApp() {
   await exitApp();
 }
 
+/* ---------- AI ---------- */
+
+let flashTimer = 0;
+function flash(text: string) {
+  status.message(text);
+  clearTimeout(flashTimer);
+  flashTimer = window.setTimeout(() => status.message(""), 6000);
+}
+
+async function ai(): Promise<AiController> {
+  if (!aiCtl) {
+    const { createController } = await import("./ai/controller");
+    aiCtl ??= createController({
+      view: () => view,
+      tab: () => active,
+      isDocTab: () => active.kind !== "settings",
+      openSettings: (section) => void openSettings(section),
+      flash,
+    });
+  }
+  return aiCtl;
+}
+
+async function openAiMenu(at?: HTMLElement | { x: number; y: number }) {
+  if (active.kind === "settings") return;
+  (await ai()).openMenu(at);
+}
+
+/** Replaces the webview's own right-click menu inside the text with ours (Notepad items + AI). */
+function onEditorContextMenu(e: MouseEvent) {
+  e.preventDefault();
+  const quick = (id: "summarize" | "shorten" | "rewrite" | "grammar", label: string) => ({
+    label: `AI: ${label}`,
+    run: () => void ai().then((c) => c.runQuick(id)),
+  });
+  showContextMenu(
+    e.clientX,
+    e.clientY,
+    [
+      ...editorItems(view, flash),
+      { label: "", sep: true },
+      { label: "AI actions...", hint: "Ctrl+I", run: () => void openAiMenu({ x: e.clientX, y: e.clientY }) },
+      quick("summarize", "Summarize"),
+      quick("shorten", "Shorten"),
+      quick("rewrite", "Rewrite (clearer)"),
+      quick("grammar", "Fix grammar and spelling"),
+    ],
+    () => view.focus(),
+  );
+}
+
 /* ---------- view commands ---------- */
 
 function toggleWrap() {
@@ -425,9 +482,12 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.altKey && !ctrl && key === "z") return inDoc ? run(toggleWrap) : undefined;
   if (!ctrl || e.altKey) return;
   // Editing shortcuts do nothing on the Settings tab (and must not reach the webview's own handlers).
-  if (!inDoc && ["s", "f", "h", "g", "p", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
+  if (!inDoc && ["s", "f", "h", "g", "p", "i", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
   switch (key) {
     case ",": return run(() => void openSettings());
+    case "i":
+      e.stopPropagation(); // not CodeMirror's own Ctrl+I
+      return run(() => void openAiMenu());
     case "n":
     case "t": return run(newTab);
     case "w": return run(() => void closeTab(active));
@@ -468,6 +528,8 @@ export async function boot() {
   window.addEventListener("keydown", onKeyDown, true);
   document.getElementById("newtab")!.onclick = newTab;
   document.getElementById("settingsbtn")!.onclick = () => void openSettings();
+  const aibtn = document.getElementById("aibtn")!;
+  aibtn.onclick = () => void openAiMenu(aibtn);
   document.getElementById("editor")!.addEventListener(
     "wheel",
     (e) => {
@@ -478,7 +540,9 @@ export async function boot() {
     { passive: false },
   );
   window.addEventListener("contextmenu", (e) => {
-    if (!(e.target as HTMLElement).closest(".cm-content, input")) e.preventDefault();
+    const target = e.target as HTMLElement;
+    if (target.closest(".cm-content")) onEditorContextMenu(e);
+    else if (!target.closest("input, textarea, #aipanel")) e.preventDefault();
   });
 
   void editorReady();

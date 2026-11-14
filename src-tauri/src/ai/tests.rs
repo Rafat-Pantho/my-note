@@ -15,7 +15,7 @@ use std::{
 use serde_json::json;
 use tauri::async_runtime::block_on;
 
-use super::net::{self, ChatMessage, Role};
+use super::net::{self, ChatMessage, ChatOptions, Role};
 use super::*;
 
 /* ---------- helpers ---------- */
@@ -36,6 +36,7 @@ fn cfg_of(e: Environment) -> AiConfig {
         enabled: true,
         active: Some(e.id.clone()),
         environments: vec![e],
+        ..AiConfig::default()
     }
 }
 
@@ -136,7 +137,7 @@ fn collect_stream(cfg: &AiConfig, key: Option<&str>) -> Result<String, String> {
     let p = permit(cfg, "e1", |_| Ok(key.map(String::from)))?;
     block_on(async {
         let mut out = String::new();
-        net::stream_chat(&p, &user("hi"), None, |t| {
+        net::stream_chat(&p, &user("hi"), ChatOptions::default(), |t| {
             out.push_str(&t);
             true
         })
@@ -652,7 +653,10 @@ fn aborting_a_stream_closes_the_connection() {
     let p = permit(&cfg, "e1", no_keychain).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     let task = tauri::async_runtime::spawn(async move {
-        net::stream_chat(&p, &user("hi"), None, |t| tx.send(t).is_ok()).await
+        net::stream_chat(&p, &user("hi"), ChatOptions::default(), |t| {
+            tx.send(t).is_ok()
+        })
+        .await
     });
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), "x");
     task.inner().abort_handle().abort(); // what `ai_cancel` does
@@ -687,10 +691,15 @@ fn stopping_from_the_callback_also_ends_the_request() {
     let cfg = cfg_of(allow(env(Kind::OpenaiCompatible, &mock.base)));
     let p = permit(&cfg, "e1", no_keychain).unwrap();
     let mut got = String::new();
-    block_on(net::stream_chat(&p, &user("hi"), None, |t| {
-        got.push_str(&t);
-        false // the receiver is gone
-    }))
+    block_on(net::stream_chat(
+        &p,
+        &user("hi"),
+        ChatOptions::default(),
+        |t| {
+            got.push_str(&t);
+            false // the receiver is gone
+        },
+    ))
     .unwrap();
     assert_eq!(got, "y");
     let start = Instant::now();
@@ -706,4 +715,50 @@ fn request_ids_are_restricted() {
     assert!(!valid_request_id(""));
     assert!(!valid_request_id("a b"));
     assert!(!valid_request_id(&"a".repeat(65)));
+}
+
+#[test]
+fn presets_are_validated_saved_and_loaded() {
+    let mut c = AiConfig::default();
+    c.save_preset(None, "  Pirate  ", "  Rewrite as a pirate.  ")
+        .unwrap();
+    assert_eq!(c.presets[0].name, "Pirate");
+    assert_eq!(c.presets[0].instruction, "Rewrite as a pirate.");
+    let id = c.presets[0].id.clone();
+    c.save_preset(Some(&id), "Pirate 2", "Arr.").unwrap();
+    assert_eq!(
+        (c.presets.len(), c.presets[0].name.as_str()),
+        (1, "Pirate 2")
+    );
+    assert!(c.save_preset(Some("nope"), "x", "y").is_err());
+    assert!(c.save_preset(None, "  ", "y").unwrap_err().contains("name"));
+    assert!(
+        c.save_preset(None, "x", " ")
+            .unwrap_err()
+            .contains("instruction")
+    );
+    assert!(c.save_preset(None, &"n".repeat(61), "y").is_err());
+    assert!(c.save_preset(None, "x", &"i".repeat(2001)).is_err());
+    while c.presets.len() < MAX_PRESETS {
+        c.save_preset(None, "p", "i").unwrap();
+    }
+    assert!(
+        c.save_preset(None, "p", "i")
+            .unwrap_err()
+            .contains("too many")
+    );
+    let ids: std::collections::HashSet<_> = c.presets.iter().map(|p| p.id.clone()).collect();
+    assert_eq!(ids.len(), MAX_PRESETS, "ids are unique");
+    // Round trip, and bad entries in the file are dropped.
+    let mut v = serde_json::to_value(&c).unwrap();
+    v["presets"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({ "id": "../x", "name": "bad", "instruction": "i" }));
+    v["presets"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({ "id": "pz", "name": "", "instruction": "i" }));
+    let back = AiConfig::from_value(Some(&v));
+    assert_eq!(back.presets, c.presets);
 }

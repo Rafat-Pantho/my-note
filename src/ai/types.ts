@@ -46,10 +46,18 @@ export interface EnvView {
   consentValid: boolean;
 }
 
+/** A saved custom action: a name and the instruction it sends. */
+export interface Preset {
+  id: string;
+  name: string;
+  instruction: string;
+}
+
 export interface AiView {
   enabled: boolean;
   active: string | null;
   environments: EnvView[];
+  presets: Preset[];
   status: AiStatus;
 }
 
@@ -60,7 +68,8 @@ export interface EnableResult {
 
 export type StreamEvent =
   | { event: "chunk"; text: string }
-  | { event: "done" }
+  /** `truncated`: the model stopped at its output limit, so the text is incomplete. */
+  | { event: "done"; truncated: boolean }
   | { event: "cancelled" }
   | { event: "error"; message: string };
 

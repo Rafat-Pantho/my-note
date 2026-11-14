@@ -1,4 +1,5 @@
 mod ai;
+mod clipboard;
 mod config;
 mod effects;
 mod files;
@@ -187,7 +188,10 @@ pub fn run() {
             ai::ai_set_model,
             ai::ai_stream,
             ai::ai_cancel,
+            ai::ai_save_preset,
+            ai::ai_delete_preset,
             ai::open_ollama_site,
+            clipboard::clipboard_read,
         ])
         .run(tauri::generate_context!())
         .expect("error while running My Note");
