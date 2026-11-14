@@ -1,16 +1,15 @@
 import { listen } from "@tauri-apps/api/event";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { applyZoom, createEditor, makeState, setUpdateHandler, setWrap, withWrap } from "./editor/editor";
+import { applyZoom, createEditor, makeState, setFont, setPrefs, setUpdateHandler, withPrefs } from "./editor/editor";
 import { modal } from "./editor/dialog";
 import { createStatusBar } from "./editor/statusbar";
 import {
   editorReady, exitApp, loadSession, pickOpenFiles, pickSavePath, readFile, saveSession,
   setTitle, showWindow, takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
-import { buildSession, parseSession, type Prefs } from "./tabs/session";
+import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
 import { type Tab, TabBar } from "./tabs/tabs";
-import { loadAppearance } from "./theme/appearance";
-import { createViewMenu } from "./theme/viewmenu";
+import { type Appearance, appearance, loadAppearance, onAppearance, setAppearance } from "./theme/appearance";
 
 const APP = "My Note";
 const SESSION_DELAY_MS = 1500;
@@ -22,6 +21,14 @@ let active!: Tab;
 let nextId = 1;
 let activateToken = 0;
 let prefs: Prefs = { wrap: true, zoom: 100 };
+/** Last real document tab, so the saved session still knows the active file while Settings is shown. */
+let lastDoc: Tab | undefined;
+let settingsTab: Tab | null = null;
+let disposeSettings: (() => void) | null = null;
+// What the editor currently uses, to apply only real changes (a slider fires many updates).
+let appliedTab = 8;
+let appliedSize = 14;
+let appliedFamily = "";
 
 const bar = new TabBar(document.getElementById("tabs")!, {
   select: (t) => void activate(t),
@@ -53,14 +60,15 @@ const isBlank = (t: Tab) => !t.path && !t.dirty && !!t.state && t.state.doc.leng
 
 function makeTab(init: Partial<Tab> & { text?: string }): Tab {
   const { text, ...rest } = init;
+  const d = appearance()?.settings; // defaults for new files; opened files override via `rest`
   return {
     id: nextId++,
     path: null,
     name: "Untitled",
     state: text === undefined ? null : makeState(text, prefs.wrap),
     dirty: false,
-    encoding: "utf-8",
-    lineEnding: "crlf",
+    encoding: d?.defaultEncoding ?? "utf-8",
+    lineEnding: d?.defaultLineEnding ?? "crlf",
     ...rest,
   };
 }
@@ -118,7 +126,7 @@ function onUpdate(u: ViewUpdate) {
 async function activate(tab: Tab): Promise<void> {
   const token = ++activateToken;
   if (active?.state && active !== tab) active.state = view.state;
-  if (!tab.state) {
+  if (!tab.state && tab.kind !== "settings") {
     const ok = await loadFromDisk(tab);
     if (!ok) {
       tabs = tabs.filter((t) => t !== tab);
@@ -128,10 +136,30 @@ async function activate(tab: Tab): Promise<void> {
     if (token !== activateToken) return;
   }
   active = tab;
-  view.setState(tab.state!);
+  const isSettings = tab.kind === "settings";
+  if (!isSettings) {
+    lastDoc = tab;
+    view.setState(tab.state!);
+  }
+  document.getElementById("app")!.classList.toggle("on-settings", isSettings);
+  document.getElementById("settings")!.hidden = !isSettings;
   refreshAll();
-  view.focus();
+  if (!isSettings) view.focus();
   scheduleSession();
+}
+
+/** One Settings tab. Its code is a lazy chunk, fetched the first time it is opened. */
+async function openSettings() {
+  if (!settingsTab || !tabs.includes(settingsTab)) {
+    const { mountSettings } = await import("./settings/panel");
+    if (!settingsTab || !tabs.includes(settingsTab)) {
+      // (a second call during the import may have created it already)
+      settingsTab = makeTab({ name: "Settings", kind: "settings" });
+      disposeSettings = mountSettings(document.getElementById("settings")!);
+      tabs.push(settingsTab);
+    }
+  }
+  await activate(settingsTab);
 }
 
 function newTab() {
@@ -144,6 +172,11 @@ async function closeTab(tab: Tab): Promise<boolean> {
   if (tab.dirty && !(await resolveUnsaved(tab))) return false;
   const i = tabs.indexOf(tab);
   tabs.splice(i, 1);
+  if (tab === settingsTab) {
+    disposeSettings?.();
+    disposeSettings = null;
+    settingsTab = null;
+  }
   if (!tabs.length) tabs.push(makeTab({ text: "" }));
   if (tab === active || !tabs.includes(active)) await activate(tabs[Math.min(i, tabs.length - 1)]);
   else {
@@ -270,13 +303,21 @@ function scheduleSession() {
 function persistSession() {
   clearTimeout(sessionTimer);
   if (active?.state) active.state = view.state;
-  return saveSession(buildSession(tabs, active, prefs)).catch(() => {});
+  const s = buildSession(tabs, active?.kind === "settings" ? lastDoc : active, prefs);
+  // "Restore session" off: keep no tabs or unsaved text on disk.
+  const data: Session = appearance()?.settings.restoreSession === false ? { ...s, active: 0, tabs: [] } : s;
+  return saveSession(data).catch(() => {});
 }
 
-async function restoreSession() {
-  const s = parseSession(await loadSession());
+async function readSession(): Promise<Session | null> {
+  return parseSession(await loadSession());
+}
+
+/** Needs the settings loaded first (restoreSession, word wrap come from them, not from the session file). */
+function applySession(s: Session | null) {
   if (!s) return;
-  prefs = s.prefs;
+  prefs.zoom = s.prefs.zoom;
+  if (appearance()?.settings.restoreSession === false) return;
   tabs = s.tabs.map((t) =>
     makeTab({
       path: t.path,
@@ -306,11 +347,24 @@ async function closeApp() {
 /* ---------- view commands ---------- */
 
 function toggleWrap() {
-  prefs.wrap = !prefs.wrap;
-  setWrap(view, prefs.wrap);
-  for (const t of tabs) if (t !== active && t.state) t.state = withWrap(t.state, prefs.wrap);
-  status.set({ wrap: prefs.wrap });
-  scheduleSession();
+  void setAppearance({ wordWrap: !prefs.wrap }); // applySettings does the rest, also for the Settings panel
+}
+
+/** Live-applies editor settings (wrap, tab size, font) to the view and every open tab. */
+function applySettings({ settings: s }: Appearance) {
+  if (s.wordWrap !== prefs.wrap || s.tabSize !== appliedTab) {
+    prefs.wrap = s.wordWrap;
+    appliedTab = s.tabSize;
+    setPrefs(view, s.wordWrap, s.tabSize);
+    for (const t of tabs) if (t !== active && t.state) t.state = withPrefs(t.state, s.wordWrap, s.tabSize);
+    status.set({ wrap: s.wordWrap });
+    scheduleSession();
+  }
+  if (s.fontSize !== appliedSize || s.fontFamily !== appliedFamily) {
+    appliedSize = s.fontSize;
+    appliedFamily = s.fontFamily;
+    setFont(view, s.fontSize, s.fontFamily, prefs.zoom);
+  }
 }
 
 function setZoom(percent: number) {
@@ -356,14 +410,18 @@ function onKeyDown(e: KeyboardEvent) {
   if (document.querySelector(".modal-bg")) return;
   const key = e.key.toLowerCase();
   const ctrl = e.ctrlKey || e.metaKey;
+  const inDoc = active?.kind !== "settings";
   const run = (fn: () => void) => {
     e.preventDefault();
     fn();
   };
-  if (e.key === "F5" && !ctrl) return run(insertDateTime);
-  if (e.altKey && !ctrl && key === "z") return run(toggleWrap);
+  if (e.key === "F5" && !ctrl) return inDoc ? run(insertDateTime) : undefined;
+  if (e.altKey && !ctrl && key === "z") return inDoc ? run(toggleWrap) : undefined;
   if (!ctrl || e.altKey) return;
+  // Editing shortcuts do nothing on the Settings tab (and must not reach the webview's own handlers).
+  if (!inDoc && ["s", "f", "h", "g", "p", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
   switch (key) {
+    case ",": return run(() => void openSettings());
     case "n":
     case "t": return run(newTab);
     case "w": return run(() => void closeTab(active));
@@ -390,7 +448,9 @@ function onKeyDown(e: KeyboardEvent) {
 export async function boot() {
   view = createEditor(document.getElementById("editor")!);
   setUpdateHandler(onUpdate);
-  const [, args] = await Promise.all([restoreSession(), takeLaunchArgs(), loadAppearance()]);
+  onAppearance(applySettings);
+  const [session, args] = await Promise.all([readSession(), takeLaunchArgs(), loadAppearance()]);
+  applySession(session);
   if (!tabs.length) {
     tabs.push(makeTab({ text: "" }));
     active = tabs[0];
@@ -401,7 +461,7 @@ export async function boot() {
 
   window.addEventListener("keydown", onKeyDown, true);
   document.getElementById("newtab")!.onclick = newTab;
-  createViewMenu(document.getElementById("viewmenu")!); // temporary, M3 removes
+  document.getElementById("settingsbtn")!.onclick = () => void openSettings();
   document.getElementById("editor")!.addEventListener(
     "wheel",
     (e) => {

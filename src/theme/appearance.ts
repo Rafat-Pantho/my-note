@@ -3,6 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 
 /** Mirrors Rust `config::Settings` and `effects::Status`. Rust validates; this only displays and applies. */
 export interface Settings {
+  defaultEncoding: string;
+  defaultLineEnding: string;
+  wordWrap: boolean;
+  /** CSS font-family list; empty means the built-in monospace stack. */
+  fontFamily: string;
+  fontSize: number;
+  tabSize: number;
+  restoreSession: boolean;
   theme: "light" | "dark" | "system";
   effects: "off" | "transparent" | "blur";
   /** 0.5 to 1.0, applied to the background layer only. */
@@ -27,6 +35,13 @@ export interface Appearance {
 }
 
 let current: Appearance | null = null;
+const listeners = new Set<(a: Appearance) => void>();
+
+/** Called after every settings change, whoever made it (panel, shortcut, OS re-check). Returns an unsubscribe. */
+export function onAppearance(fn: (a: Appearance) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 export const appearance = (): Appearance | null => current;
 
@@ -39,13 +54,14 @@ export function applyAppearance(a: Appearance): void {
   root.classList.toggle("fx-blur", a.status.active === "blur");
   root.classList.toggle("reduce-fx", a.settings.reduceEffects);
   root.style.setProperty("--fx-pct", `${Math.round(a.settings.opacity * 100)}%`);
+  for (const fn of listeners) fn(a);
 }
 
 /** Loads settings and the real effect status from Rust, applies them. Never throws: failure leaves the
- *  default solid dark look, which is a fully working editor. */
+ *  default solid dark look and default settings, which is a fully working editor. */
 export async function loadAppearance(): Promise<void> {
   try {
-    applyAppearance(await invoke<Appearance>("get_appearance"));
+    applyAppearance(await invoke<Appearance>("get_settings"));
     // Rust re-checks OS state on focus/theme change and tells us if the outcome changed.
     void listen<Appearance>("appearance-changed", (e) => applyAppearance(e.payload));
   } catch {
@@ -54,7 +70,7 @@ export async function loadAppearance(): Promise<void> {
 }
 
 export async function setAppearance(patch: Partial<Settings>): Promise<Appearance> {
-  const a = await invoke<Appearance>("set_appearance", { patch });
+  const a = await invoke<Appearance>("set_settings", { patch });
   applyAppearance(a);
   return a;
 }

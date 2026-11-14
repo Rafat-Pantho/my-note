@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Mica / Acrylic (Windows) and vibrancy (macOS) behind a transparent window. Small: a few DWM / AppKit calls.
 window-vibrancy = "0.8"
+keyring = "4"
 
 # windows-sys: startup timing (process creation time), plus registry and high-contrast reads for the effects
 # fallback checks. windows-version: OS build number (the crate window-vibrancy gates on). Both are already in

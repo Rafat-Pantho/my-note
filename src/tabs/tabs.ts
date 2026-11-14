@@ -9,6 +9,8 @@ export interface Tab {
   dirty: boolean;
   encoding: string;
   lineEnding: string;
+  /** The single Settings tab: no document, never saved or restored. */
+  kind?: "settings";
   /** Untitled tab whose changes were thrown away at app close; not restored. */
   discarded?: boolean;
 }

@@ -26,7 +26,7 @@ export interface Session {
 }
 
 export function buildSession(tabs: Tab[], active: Tab | undefined, prefs: Prefs): Session {
-  const kept = tabs.filter((t) => !t.discarded);
+  const kept = tabs.filter((t) => !t.discarded && t.kind !== "settings");
   const out: SessionTab[] = kept.map((t) => {
     const s: SessionTab = {
       path: t.path,

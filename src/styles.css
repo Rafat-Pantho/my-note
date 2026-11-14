@@ -71,7 +71,9 @@ html.fx, html.fx body { background: transparent; }
 html.fx #tint { display: block; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 #app { display: flex; flex-direction: column; height: 100%; }
-#editor { flex: 1; min-height: 0; position: relative; user-select: text; background: var(--s-bg); }
+#editor, #settings { flex: 1; min-height: 0; position: relative; user-select: text; background: var(--s-bg); }
+#settings { overflow: auto; }
+#app.on-settings #editor, #app.on-settings #statusbar { display: none; }
 
 /* ---------- tabs (browser style) ---------- */
 #tabbar { display: flex; align-items: flex-end; flex: none; background: var(--s-strip); padding: 6px 6px 0; gap: 2px; }
@@ -99,7 +101,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .tabbtn:hover { background: var(--bg-hover); color: var(--fg); }
 #newtab { width: 28px; padding: 0; font-size: 16px; }
 #tabbar .sp { flex: 1; }
-#viewmenu { font-size: 12px; }
+#settingsbtn { font-size: 12px; }
 
 /* ---------- status bar ---------- */
 #statusbar { display: flex; align-items: center; gap: 2px; height: 26px; padding: 0 6px; flex: none;
@@ -118,9 +120,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .menu button:hover:not(:disabled) { background: var(--bg-hover); }
 .menu button:disabled { color: var(--fg-dim); cursor: default; }
 .menu button.on::before { content: "✓"; position: absolute; left: 7px; }
-.menu .hd { padding: 6px 14px 2px 8px; font-size: 11px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
-.menu .note { padding: 4px 8px 4px 8px; max-width: 260px; font-size: 11px; line-height: 1.35; color: var(--fg-dim); white-space: normal; user-select: text; }
-.menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 
 /* ---------- modal ---------- */
 .modal-bg { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding-top: 18vh; animation: fade var(--dur) ease-out; }

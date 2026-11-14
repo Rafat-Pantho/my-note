@@ -1,0 +1,37 @@
+/* Settings panel (lazy chunk, loaded with panel.ts). Uses the theme variables from styles.css. */
+.st { display: flex; height: 100%; font-size: 13px; }
+.st-nav { flex: none; width: 170px; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px;
+  border-right: 1px solid var(--border); }
+.st-nav button { text-align: left; padding: 7px 12px; border-radius: 6px; color: var(--fg-dim);
+  transition: background var(--dur), color var(--dur); }
+.st-nav button:hover { background: var(--bg-hover); color: var(--fg); }
+.st-nav button.on { background: var(--bg-hover-strong); color: var(--fg); }
+.st-main { flex: 1; min-width: 0; overflow: auto; padding: 20px 32px 40px; }
+.st-main section { max-width: 640px; }
+.st h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+
+.st .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 0;
+  border-bottom: 1px solid var(--border); }
+.st .lbl { min-width: 0; }
+.st .hint { display: block; margin-top: 2px; font-size: 11px; color: var(--fg-dim); }
+.st .grow { flex: 1; display: flex; justify-content: flex-end; max-width: 280px; }
+.st .note { margin: 14px 0 0; font-size: 12px; line-height: 1.45; color: var(--fg-dim); user-select: text; }
+
+.st select, .st input[type=number], .st input[type=text] {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px; font: inherit; outline: none; }
+.st select:focus, .st input[type=number]:focus, .st input[type=text]:focus { border-color: var(--accent); }
+.st select { min-width: 170px; }
+.st input.num { width: 80px; }
+.st input.wide { width: 100%; }
+.st input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.st .range { display: flex; align-items: center; gap: 10px; }
+.st input[type=range] { width: 160px; accent-color: var(--accent); }
+.st input[type=range]:disabled { opacity: 0.45; }
+.st output { min-width: 3em; text-align: right; color: var(--fg-dim); }
+
+@media (max-width: 560px) {
+  .st-nav { width: 120px; }
+  .st-main { padding: 16px; }
+  .st .row { flex-wrap: wrap; gap: 8px; }
+}

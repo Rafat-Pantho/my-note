@@ -4,13 +4,33 @@
 - [x] M0 Scaffold (Tauri v2 + Vite + vanilla TS + CodeMirror 6, hidden window shown after first paint, timing, release profile, CSP)
 - [x] M1 Notepad parity (tabs, files, encodings, line endings, session restore, find/replace, view, print)
 - [x] M2 Look and effects (themes, effects engine, opacity + tint, fallbacks, --no-effects, temporary View menu)
-- [ ] M3
+- [x] M3 Settings panel (own lazy tab, versioned config.json, live apply, keychain commands, View menu removed)
 - [ ] M4
 - [ ] M5
 - [ ] M6
 - [ ] M7
 - [ ] M8
 - [ ] M9
+
+## M3 results (release, Windows 11 build 26300)
+- exe: 4,553,216 bytes (4.3 MB) vs 10 MB: OK. Up 1.0 MB from M2 (3.3 MB); almost all of it is `keyring` 4.2 (its Windows store pulls in `regex`). Options if that ever matters: call Credential Manager through windows-sys directly (~100 lines, no regex).
+- initial JS: 95.7 KB gzipped (296.3 KB raw) + 7.3 KB CSS vs 300 KB: OK (M2: 95.6 KB; the panel adds nothing). Settings is a lazy chunk: 1.9 KB gz JS + 1.8 KB CSS.
+- startup, 4 warm runs, editor ready / shown: 409/466, 406/460, 434/488, 396/458 ms. Slightly better than M2 (436-471 ready); the 400 ms budget is still NOT MET (2 of 4 runs within 10 ms of it). Config load is one small file read.
+- Rust tests: 33 pass (config: defaults, per-field validation, font family, round trip, unversioned and legacy-file migration, invalid JSON / empty / non-object / future version / bad version / non-UTF-8 all backed up, debounce state; keychain: id rules). cargo fmt and clippy clean.
+- Verified on the real release exe over the WebView2 debug port: Ctrl+, and the Settings button open one tab only (repeat presses reuse it); View menu gone; a seeded M2 `settings.json` migrated to `config.json` and the old file was removed; font size/family, tab size, word wrap, theme, effect mode apply live; out-of-range font size clamps back in the control (999 -> 48), an invalid font family reverts; config.json is written after the debounce with `version: 1`; closing the tab restores the editor with tab size 4 / wrap off; screenshots of General, Appearance, AI looked right (light theme).
+- NOT verified: keychain commands against the real Windows Credential Manager (only the id validation is unit tested; no UI calls them until M4); backup of an invalid file on a real launch (unit tested); the exit flush; Ctrl+, on macOS (Cmd+,); default encoding / line ending applied to a new tab then saved; restore-session off across a restart; narrow-window layout.
+
+## Decisions (M3)
+- Settings = one flat camelCase struct in `config.rs`; `config.json` (version 1) in the app CONFIG dir (same folder as the data dir on Windows/macOS, `~/.config` on Linux). Session stays in the data dir. Unversioned `settings.json` from M2 is read once as version 0, saved as `config.json`, then deleted. `migrate()` is the single place for future steps.
+- Invalid file (not JSON, not an object, bad version, newer version, not UTF-8) is moved to `config.json.invalid-<unix time>` and defaults load; the backup is never overwritten. Per-field problems in an otherwise valid file just fall back for that field. Unreadable for another reason (permissions): defaults, file left alone.
+- Saves: changes apply in memory at once; a delayed thread writes after 400 ms of quiet (newest change wins), and `exit_app` flushes anything pending. Atomic write is temp file + rename. A hard kill within 400 ms loses that last tweak.
+- Commands renamed `get_settings` / `set_settings` (patch in, full settings + real effect status out; invalid fields ignored, numbers clamped: font 8-48, tab 1-16, opacity 0.5-1). Font family is rejected if it has control chars or `; { } < > \` (it goes into a CSS variable).
+- Settings is a tab with `kind: "settings"` (no document): hides `#editor` and the status bar, is never saved to the session, single instance, panel DOM is built on open and torn down on close. Editing shortcuts (save, find, goto, print, zoom, F5, Alt+Z) are ignored while it is active. The "menu entry" is a Settings button in the tab bar (there is no app menu bar yet).
+- Word wrap now comes from settings (Alt+Z and the status bar toggle write the setting); the session file's `wrap` is ignored. Zoom stays in the session. Font size is the base for zoom (`--editor-font` = size x zoom).
+- Restore session off: the session file is written with no tabs (no unsaved text left on disk) and nothing is restored; zoom still is.
+- Keychain: `key_set` / `key_delete` / `key_has` only, async, ids limited to `[a-z0-9._-]` up to 64 chars, service name `my-note`. No command returns a secret; M4's Rust code will read keys inside Rust. New dependency `keyring` 4 (+~1.0 MB, see above): OS keychain access is the one thing we must not hand-roll for macOS/Linux.
+- Status bar is hidden on the Settings tab. M4 must decide how the always-visible AI environment indicator behaves there.
+- Removed: `src/theme/viewmenu.ts`, the `#viewmenu` button, `.menu .hd/.note/hr` CSS.
 
 ## M0 results (release, Windows)
 - exe: 3,257,344 bytes (3.1 MB) vs 10 MB budget: OK
@@ -41,7 +61,7 @@
 - Window is `transparent: true` in tauri.conf (required by window-vibrancy); solid mode gets an opaque window/webview background from Rust (`set_background_color`), effects get alpha 0 (WebView2 only honors 0 or 255). macOS needs the `macos-private-api` feature + `macOSPrivateApi` (no effect elsewhere).
 - Opacity applies only to the background surfaces (`color-mix` on `--s-bg` / `--s-strip`), never to text. A separate fixed `#tint` layer (theme colour, 35% for Transparent, 15% for Blur) sits under the surfaces so text stays readable on any wallpaper. Menus, dialogs and the find panel are always opaque.
 - Theme: CSS variables on `<html data-theme>`; Rust resolves System (window theme) and also sets the native title bar theme. Fonts are system stacks only. Tabs are browser style (rounded top, accent bar on the active tab, dividers) and only a newly opened tab animates (120 ms).
-- Temporary View menu: `src/theme/viewmenu.ts` + the `#viewmenu` button in index.html + one line in app.ts. M3 deletes all three.
+- Temporary View menu: removed in M3.
 - New dependencies: `window-vibrancy` 0.8 (effects; ~21 KB in the exe total with the rest of M2). `windows-version` (direct, already in the tree via tao/window-vibrancy; OS build number), extra `windows-sys` features (registry, accessibility; already in tree), `gtk` 0.18 on Linux only (already in tree via tauri; compositor check).
 - Tauri app data dir ignores the APPDATA env var on Windows, so test runs wrote to the real `%APPDATA%\com.example.mynote`. The test `settings.json` was deleted afterwards; `session.json` there holds an empty Untitled tab.
 
@@ -69,6 +89,6 @@
 - Window is shown after two animation frames following editor creation.
 
 ## Next
-- M3 (Settings UI): remove the temporary View menu, move theme/effects/opacity/Reduce effects into Settings.
+- M4: fill in the AI section (consent flow, keys through `key_set`, status bar environment indicator).
 - Open: re-run the text-legibility screenshots in both themes at 50%; test `--no-effects` and Reduce effects at runtime; try Windows 10 / 11 21H2 / macOS / Linux if available.
 

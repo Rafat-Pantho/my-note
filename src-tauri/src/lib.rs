@@ -1,11 +1,10 @@
 mod config;
 mod effects;
 mod files;
+mod keychain;
 mod timing;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-
-use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, WindowEvent};
@@ -36,6 +35,7 @@ fn set_title(window: WebviewWindow, title: String) {
 
 #[tauri::command]
 fn exit_app(app: AppHandle) {
+    config::flush(&app); // pending debounced settings
     app.exit(0);
 }
 
@@ -62,35 +62,32 @@ struct Appearance {
 
 /// Settings plus what the window is really doing. Sync command: runs on the main thread.
 #[tauri::command]
-fn get_appearance(
+fn get_settings(
     window: WebviewWindow,
     settings: State<SettingsState>,
     fx: State<EffectsState>,
 ) -> Appearance {
-    let settings = settings.0.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let settings = settings.get();
     let status = effects::apply(&window, &settings, &fx);
     fx.record(&status);
     Appearance { settings, status }
 }
 
-/// Merges a partial settings object (theme, effects, opacity, reduceEffects), saves it and re-applies.
+/// Merges a partial settings object, applies it now and saves it after a short debounce.
+/// Invalid fields are ignored (the reply carries the values actually in effect).
 #[tauri::command]
-fn set_appearance(
+fn set_settings(
     app: AppHandle,
     window: WebviewWindow,
     patch: serde_json::Value,
     settings: State<SettingsState>,
     fx: State<EffectsState>,
-) -> Result<Appearance, String> {
-    let mut guard = settings.0.lock().unwrap_or_else(|e| e.into_inner());
-    guard.merge_json(&patch);
-    let settings = guard.clone();
-    drop(guard);
-    let saved = config::save_settings(&app, &settings);
+) -> Appearance {
+    let settings = settings.update(&patch);
+    config::schedule_save(&app);
     let status = effects::apply(&window, &settings, &fx);
     fx.record(&status);
-    saved?;
-    Ok(Appearance { settings, status })
+    Appearance { settings, status }
 }
 
 /// Re-checks OS state (transparency toggled, high contrast, theme) and tells the frontend if the result
@@ -103,7 +100,7 @@ fn refresh_appearance(app: &AppHandle) {
     ) else {
         return;
     };
-    let settings = settings.0.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let settings = settings.get();
     let status = effects::apply(&window, &settings, &fx);
     if fx.record(&status) {
         let _ = window.emit("appearance-changed", Appearance { settings, status });
@@ -117,7 +114,7 @@ pub fn run() {
             // First-launch state is solid (effects Off). Applied before the window is ever shown.
             let settings = config::load_settings(app.handle());
             let no_effects = std::env::args_os().any(|a| a == "--no-effects");
-            app.manage(SettingsState(Mutex::new(settings.clone())));
+            app.manage(SettingsState::new(settings.clone()));
             app.manage(EffectsState::new(no_effects));
             if let Some(window) = app.get_webview_window("main") {
                 let fx = app.state::<EffectsState>();
@@ -155,8 +152,11 @@ pub fn run() {
             files::pick_save_path,
             config::load_session,
             config::save_session,
-            get_appearance,
-            set_appearance,
+            get_settings,
+            set_settings,
+            keychain::key_set,
+            keychain::key_delete,
+            keychain::key_has,
         ])
         .run(tauri::generate_context!())
         .expect("error while running My Note");

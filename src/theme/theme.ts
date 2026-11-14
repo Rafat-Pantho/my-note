@@ -5,7 +5,7 @@ import { EditorView } from "@codemirror/view";
 export const theme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "transparent", color: "var(--fg)" },
   ".cm-scroller": {
-    fontFamily: "var(--mono-font)",
+    fontFamily: "var(--mono-user, var(--mono-font))",
     fontSize: "var(--editor-font)",
     lineHeight: "1.5",
   },
