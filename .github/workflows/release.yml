@@ -47,9 +47,12 @@ jobs:
         run: |
           ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -n1)
           if [ -z "$ID" ]; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "My Note ${TAG}" --notes "Draft. Check the files, then publish."
-            ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -n1)
+            # Take the id from the create response: the release list can lag behind a just-created draft.
+            ID=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -f name="My Note ${TAG}" \
+              -f body="Draft. Check the files, then publish." -F draft=true --jq .id)
           fi
+          test -n "$ID" || { echo "::error::could not create or find the draft release for ${TAG}"; exit 1; }
           echo "release_id=${ID}" >> "$GITHUB_OUTPUT"
 
   build:

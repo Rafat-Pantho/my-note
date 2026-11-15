@@ -209,7 +209,8 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Windows installer: WebView2 `downloadBootstrapper` (default). The installer fetches WebView2 only when it is missing.
 - Not done: no auto-updater (`includeUpdaterJson: false`), no code signing (macOS builds are unsigned and unnotarized; Windows SmartScreen will warn).
 - Icons: generated from `my-note-logo.jpg` with `npx tauri icon my-note-logo.jpg` (Android/iOS sets deleted, not used); `bundle.icon` lists them in tauri.conf.json. Exe icon checked in the release build (6,016,000 bytes). To change: replace the jpg/png and re-run the command.
-- Not verified here: the workflows have not run on GitHub yet (no remote is configured in this clone). Local checks pass: tsc, npm test, vite build, cargo fmt, clippy `-D warnings`, cargo test (86 tests).
+- First real run (2026-11-15, tag v0.1.0): all installers built on Windows, macOS (both) and Linux, but `draft` output an empty release id (the release list lagged behind the just-created draft), so the portable-zip upload got 404 and `checksums` was skipped. Fixed: the id now comes from the create response, and the job fails if it is empty. CI also broke once on a new clippy lint in Rust 1.100 (fixed in `files.rs`).
+- (Original note) Before that, the workflows had never run on GitHub. Local checks pass: tsc, npm test, vite build, cargo fmt, clippy `-D warnings`, cargo test (86 tests).
 
 ## How to release
 1. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` to match, commit.
