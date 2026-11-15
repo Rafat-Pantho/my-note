@@ -4,9 +4,9 @@ A fast, modern, cross-platform notepad with optional local or remote AI.
 
 Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. No UI framework.
 
-<!-- SCREENSHOT PLACEHOLDER: add one or two images here (light and dark theme). -->
+![My Note, dark theme](docs/screenshots/dark.png)
 
-*Screenshots coming soon.*
+![My Note, light theme](docs/screenshots/light.png)
 
 ## Features
 
@@ -22,7 +22,7 @@ Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. N
 
 ## Download and install
 
-Go to **GitHub Releases** for this project and download the file you want:
+Go to [GitHub Releases](https://github.com/Rafat-Pantho/my-note/releases) and download the file you want:
 
 - `My-Note_<version>_x64-setup.exe` or `.msi`: Windows installer. The installer fetches WebView2 only if it is missing.
 - `My-Note_<version>_windows-x64-portable.zip`: the program as a single exe, no install.
@@ -46,6 +46,8 @@ Go to **GitHub Releases** for this project and download the file you want:
 Requirements: Node.js (LTS), Rust (stable), and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```bash
+git clone https://github.com/Rafat-Pantho/my-note.git
+cd my-note
 npm ci
 npm run tauri dev            # run in development
 npx tauri build --no-bundle  # release exe only (Windows): src-tauri/target/release/my-note.exe

@@ -209,4 +209,4 @@ All runs below drove the real release exe over the WebView2 debug port with real
 ## M9 README, license, contributing
 - Done: `README.md` (features, download and install from GitHub Releases, privacy, build from source, keyboard shortcuts from `src/app.ts`, unsigned-build SmartScreen note, screenshot placeholder), `LICENSE` (MIT, `[YOUR NAME]` placeholder, 2026), `CONTRIBUTING.md` (setup, test commands, rules from CLAUDE.md, budgets).
 - Decisions: only facts checked against the code. Ctrl+Tab left out (M1 notes say WebView2 may swallow it); Ctrl+PageUp/PageDown listed instead. Linux/macOS keychain wording kept generic.
-- Milestone closed. Left for the owner (not done on purpose): replace `[YOUR NAME]` in LICENSE (copyright holder is their choice); add screenshots; set the GitHub URL once a remote exists.
+- Owner follow-ups done: LICENSE holder set to Rafat Abdullah Pantho (MIT); two screenshots (dark, light) in `docs/screenshots/`, taken from the release exe over the WebView2 debug port and linked in the README; README links and clone URL point to https://github.com/Rafat-Pantho/my-note; remote `origin` added. Nothing pushed (by request).
