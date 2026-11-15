@@ -10,7 +10,7 @@
 - [x] M6 Performance pass (see docs/PERFORMANCE.md)
 - [x] M7 GitHub builds and releases (CI workflow, draft release workflow, portable zip, SHA256SUMS; see below)
 - [x] M8 Final QA (table below; one open finding)
-- [ ] M9
+- [x] M9 README, license, contributing (three items left for the owner, see the M9 section)
 
 ## M8 Final QA (release exe from `tauri build --no-bundle`, Windows 11 build 26300)
 Checks: `tsc` clean, `npm test` 60 pass, `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 86 pass, release build OK: exe 6,010,368 bytes (5.7 MB, budget 10 MB), initial JS unchanged from M6 (98.9 kB gz). Note: plain `cargo build --release` makes an exe that loads the dev URL (blank page); always use `npx tauri build --no-bundle`. No source changes were needed in M8.
@@ -209,4 +209,4 @@ All runs below drove the real release exe over the WebView2 debug port with real
 ## M9 README, license, contributing
 - Done: `README.md` (features, download and install from GitHub Releases, privacy, build from source, keyboard shortcuts from `src/app.ts`, unsigned-build SmartScreen note, screenshot placeholder), `LICENSE` (MIT, `[YOUR NAME]` placeholder, 2026), `CONTRIBUTING.md` (setup, test commands, rules from CLAUDE.md, budgets).
 - Decisions: only facts checked against the code. Ctrl+Tab left out (M1 notes say WebView2 may swallow it); Ctrl+PageUp/PageDown listed instead. Linux/macOS keychain wording kept generic.
-- Next: replace `[YOUR NAME]` in LICENSE; add screenshots; the GitHub URL is not set (no remote in this clone).
+- Milestone closed. Left for the owner (not done on purpose): replace `[YOUR NAME]` in LICENSE (copyright holder is their choice); add screenshots; set the GitHub URL once a remote exists.
