@@ -420,6 +420,7 @@ pub fn search_web(
 }
 
 /// `/select,"<path>"` for Explorer (it wants backslashes and the quotes inside the one argument).
+#[cfg(any(windows, test))]
 fn explorer_select_arg(path: &str) -> String {
     format!("/select,\"{}\"", path.replace('/', "\\"))
 }
