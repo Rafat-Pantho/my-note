@@ -37,11 +37,25 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// A session file up to this size is sent with the first request; a bigger one is announced with
+/// `SESSION_LARGE` and sent when the frontend asks again (`full`), after the first paint. Pushing megabytes
+/// through the webview's IPC at startup blocks the small `editor_ready` / `show_window` calls behind it.
+const SESSION_INLINE_MAX: u64 = 256 * 1024;
+/// A session file always starts with `{`, so a single other byte is unambiguous.
+const SESSION_LARGE: u8 = b'L';
+
+fn session_deferred(len: Option<u64>, full: bool) -> bool {
+    !full && len.is_some_and(|n| n > SESSION_INLINE_MAX)
+}
+
 /// Empty body when there is no saved session.
 #[tauri::command]
-pub async fn load_session(app: AppHandle) -> Result<Response, String> {
-    let bytes = fs::read(data_file(&app, "session.json")?).unwrap_or_default();
-    Ok(Response::new(bytes))
+pub async fn load_session(app: AppHandle, full: bool) -> Result<Response, String> {
+    let path = data_file(&app, "session.json")?;
+    if session_deferred(fs::metadata(&path).ok().map(|m| m.len()), full) {
+        return Ok(Response::new(vec![SESSION_LARGE]));
+    }
+    Ok(Response::new(fs::read(path).unwrap_or_default()))
 }
 
 #[tauri::command]
@@ -409,6 +423,15 @@ pub fn schedule_save(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn big_session_is_deferred_until_asked_for() {
+        assert!(!session_deferred(None, false)); // no file
+        assert!(!session_deferred(Some(SESSION_INLINE_MAX), false)); // at the limit: sent now
+        assert!(session_deferred(Some(SESSION_INLINE_MAX + 1), false));
+        assert!(!session_deferred(Some(SESSION_INLINE_MAX + 1), true)); // the second request gets it all
+        assert_ne!(SESSION_LARGE, b'{'); // cannot be mistaken for a session file
+    }
 
     /// Empty scratch dir, removed on drop.
     struct Scratch(PathBuf);

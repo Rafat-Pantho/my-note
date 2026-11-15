@@ -7,10 +7,25 @@
 - [x] M3 Settings panel (own lazy tab, versioned config.json, live apply, keychain commands, View menu removed)
 - [x] M4 AI connection layer (environments, consent gate, model lists, streaming plumbing, Test connection)
 - [x] M5 AI actions, preview and rollback
-- [ ] M6
+- [x] M6 Performance pass (see docs/PERFORMANCE.md)
 - [ ] M7
 - [ ] M8
 - [ ] M9
+
+## M6 results (release, Windows 11 build 26300) - full numbers and how to reproduce: docs/PERFORMANCE.md
+- startup, final 5 runs, editor ready / window shown: 407/455, 394/441, 388/432, 411/438, 399/447 ms (medians 399 / 441). Before the changes: median 389 / 437 (same within noise: normal sessions were already fast). The 400 ms budget is NOT reliably met: ready is on the line, the visible window is about 40 ms over. Not relaxed.
+- Top causes: (1) WebView2 environment creation, about 320 ms, before Tauri `setup` even starts (`run()` at 10 ms, `setup` at 341 ms; no code of ours runs, WebView2 flags tried changed nothing); (2) ready to shown 40-50 ms (two frames + `Window::show`); (3) page boot about 70 ms (parsing the 276 KB CodeMirror chunk, 3 parallel IPC calls).
+- exe: 6,010,368 bytes (5.7 MB) vs 10 MB: OK. Initial JS: 98.9 kB gzipped + 2.5 kB CSS vs 300 KB: OK. Settings, AI controller, diff, api, find are NOT in `dist/index.html` (only index, CodeMirror chunk, appearance).
+- idle memory: about 372 MB working set / 205 MB private (7 processes); with `--disable-gpu` 330 / 105 MB.
+- Big session (3 x 6 MB unsaved tabs, 19 MB file): editor ready 550 ms -> about 375 ms. A session file over 256 KB is announced with one byte and fetched/parsed after the window is shown; saving is suspended until it is restored, and closing waits for it. Rust test for the gate (86 pass), cargo fmt/clippy and tsc clean, 60 frontend tests pass. Verified: the 19 MB session came back intact and was saved again. NOT verified: typing into the placeholder before the late restore lands (merge path), on the real app.
+- No-GPU (`--disable-gpu`, confirmed software compositing over CDP): typing p50 12 ms / max 19 ms key-to-frame, scrolling 15k lines at 6.1 ms frames, 24 tab switches max 13.6 ms, zero long tasks; effects fall back as before (Reduce effects -> solid with reason); startup median 381 / 398 ms. NOT tested: a slow machine, 4K, the OS transparency toggle.
+- WebView2 data folder: `%LOCALAPPDATA%\com.example.mynote\EBWebView` (default, local), 125 MB.
+
+## Decisions (M6)
+- Defaulting WebView2 to `--disable-gpu` would meet the visible-window budget (median 398 ms) and save about 100 MB, but changes rendering for everyone: NOT applied, left for the user to decide.
+- `MYNOTE_TIMING=1` also prints `run`, `setup start/done` and a page breakdown, passed inside the existing `editor_ready` call (no extra IPC; ignored without the variable).
+- Session loading: `load_session(full)`; `full=false` returns a single `L` byte for a file over 256 KB (a session always starts with `{`). Frontend: `isSessionLarge`, `lateRestore` in `app.ts` (replaces a blank placeholder, else restored tabs go first; zoom applied unless the user already zoomed).
+- `docs/measure-startup.ps1` is the repeatable startup and memory measurement.
 
 ## M5 results (release, Windows 11 build 26300)
 - exe: 6,009,344 bytes (5.7 MB) vs 10 MB: OK (M4 5,974,016: +35 KB; Rust: presets, truncation signal, `num_ctx`, Windows clipboard read).
@@ -146,6 +161,7 @@
 - Window is shown after two animation frames following editor creation.
 
 ## Next
-- M6: not started. Open items from M5: click-test the saved-preset form in Settings, Regenerate and Copy; a real chat against each provider; a model-context lookup for Ollama (`/api/show`) instead of the fixed 32k cap; consider saving rollback history with the session.
+- Decide on `--disable-gpu` by default (see Decisions M6); other levers for the startup budget: show the window sooner than two frames, split or trim the CodeMirror chunk.
+- M6 done. Open items from M5: click-test the saved-preset form in Settings, Regenerate and Copy; a real chat against each provider; a model-context lookup for Ollama (`/api/show`) instead of the fixed 32k cap; consider saving rollback history with the session.
 - Open: re-run the text-legibility screenshots in both themes at 50%; test `--no-effects` and Reduce effects at runtime; try Windows 10 / 11 21H2 / macOS / Linux if available.
 

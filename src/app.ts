@@ -6,7 +6,7 @@ import { editorItems, showContextMenu } from "./editor/contextmenu";
 import { modal } from "./editor/dialog";
 import { createStatusBar } from "./editor/statusbar";
 import {
-  editorReady, exitApp, loadSession, pickOpenFiles, pickSavePath, readFile, saveSession,
+  decodeSession, editorReady, exitApp, isSessionLarge, loadSessionBytes, pickOpenFiles, pickSavePath, readFile, saveSession,
   setTitle, showWindow, takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
@@ -22,6 +22,10 @@ let view!: EditorView;
 let tabs: Tab[] = [];
 let active!: Tab;
 let nextId = 1;
+/** True while a large session file is still being read after the first paint. */
+let restoring = false;
+let restoreDone: Promise<void> = Promise.resolve();
+let zoomTouched = false;
 let activateToken = 0;
 let prefs: Prefs = { wrap: true, zoom: 100 };
 /** Last real document tab, so the saved session still knows the active file while Settings is shown. */
@@ -313,6 +317,7 @@ function scheduleSession() {
 
 function persistSession() {
   clearTimeout(sessionTimer);
+  if (restoring) return Promise.resolve(); // the saved session has not been read yet: never overwrite it
   if (active?.state) active.state = view.state;
   const s = buildSession(tabs, active?.kind === "settings" ? lastDoc : active, prefs);
   // "Restore session" off: keep no tabs or unsaved text on disk.
@@ -320,16 +325,11 @@ function persistSession() {
   return saveSession(data).catch(() => {});
 }
 
-async function readSession(): Promise<Session | null> {
-  return parseSession(await loadSession());
-}
+const sessionOf = (buf: ArrayBuffer): Session | null => parseSession(decodeSession(buf));
 
-/** Needs the settings loaded first (restoreSession, word wrap come from them, not from the session file). */
-function applySession(s: Session | null) {
-  if (!s) return;
-  prefs.zoom = s.prefs.zoom;
-  if (appearance()?.settings.restoreSession === false) return;
-  tabs = s.tabs.map((t) =>
+/** Tabs described by a saved session. Tabs without text are file-backed and load on first activation. */
+function sessionTabs(s: Session): Tab[] {
+  return s.tabs.map((t) =>
     makeTab({
       path: t.path,
       name: t.name,
@@ -339,13 +339,47 @@ function applySession(s: Session | null) {
       text: t.text,
     }),
   );
-  // Tabs without text are file-backed and load on first activation.
+}
+
+/** Needs the settings loaded first (restoreSession, word wrap come from them, not from the session file). */
+function applySession(s: Session | null) {
+  if (!s) return;
+  prefs.zoom = s.prefs.zoom;
+  if (appearance()?.settings.restoreSession === false) return;
+  tabs = sessionTabs(s);
   active = tabs[Math.min(s.active, tabs.length - 1)];
+}
+
+/**
+ * A session that arrived after the first paint (a big one). Nothing the user did meanwhile is lost: if the
+ * placeholder tab is still untouched it is replaced, otherwise the restored tabs are put before the current ones.
+ */
+async function lateRestore(s: Session | null) {
+  restoring = false;
+  if (s && appearance()?.settings.restoreSession !== false) {
+    if (!zoomTouched) {
+      prefs.zoom = s.prefs.zoom;
+      applyZoom(view, prefs.zoom);
+      status.set({ zoom: prefs.zoom });
+    }
+    const restored = sessionTabs(s);
+    if (restored.length) {
+      if (tabs.length === 1 && isBlank(tabs[0])) {
+        tabs = restored;
+        await activate(restored[Math.min(s.active, restored.length - 1)]);
+      } else {
+        tabs = [...restored, ...tabs];
+        refreshTabs();
+      }
+    }
+  }
+  scheduleSession(); // saves skipped while restoring
 }
 
 /* ---------- app close ---------- */
 
 async function closeApp() {
+  await restoreDone; // never save over a session that is still being restored
   for (const tab of tabs.filter((t) => t.dirty)) {
     if (!(await resolveUnsaved(tab))) return;
     tab.dirty = false;
@@ -431,6 +465,7 @@ function applySettings({ settings: s, ai }: Appearance) {
 }
 
 function setZoom(percent: number) {
+  zoomTouched = true;
   prefs.zoom = Math.min(500, Math.max(10, percent));
   applyZoom(view, prefs.zoom);
   status.set({ zoom: prefs.zoom });
@@ -512,11 +547,20 @@ function onKeyDown(e: KeyboardEvent) {
 /* ---------- boot ---------- */
 
 export async function boot() {
+  const marks: string[] = [`boot ${Math.round(performance.now())}`];
   view = createEditor(document.getElementById("editor")!);
   setUpdateHandler(onUpdate);
   onAppearance(applySettings);
-  const [session, args] = await Promise.all([readSession(), takeLaunchArgs(), loadAppearance()]);
-  applySession(session);
+  // A normal session comes with the first request, in parallel with the settings. A big one (megabytes of
+  // unsaved text) is fetched and parsed only after the first paint, so it cannot hold the page up.
+  const [sessionBuf, args] = await Promise.all([
+    loadSessionBytes(false).catch(() => new ArrayBuffer(0)),
+    takeLaunchArgs(),
+    loadAppearance(),
+  ]);
+  restoring = isSessionLarge(sessionBuf);
+  marks.push(`ipc ${Math.round(performance.now())}${restoring ? " (session late)" : ""}`);
+  if (!restoring) applySession(sessionOf(sessionBuf));
   if (!tabs.length) {
     tabs.push(makeTab({ text: "" }));
     active = tabs[0];
@@ -545,9 +589,23 @@ export async function boot() {
     else if (!target.closest("input, textarea, #aipanel")) e.preventDefault();
   });
 
-  void editorReady();
+  marks.push(`active ${Math.round(performance.now())}`);
+  void editorReady(marks.join(", "));
   // Show the window only after the first frame has been painted.
-  requestAnimationFrame(() => requestAnimationFrame(() => void showWindow()));
+  const shown = new Promise<void>((resolve) =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        void showWindow();
+        setTimeout(resolve, 60); // let the show reach Rust before any heavy parsing
+      }),
+    ),
+  );
+  if (restoring) {
+    restoreDone = shown
+      .then(() => loadSessionBytes(true))
+      .then((buf) => lateRestore(sessionOf(buf)))
+      .catch(() => lateRestore(null));
+  }
 
   void listen<{ paths: string[] }>("tauri://drag-drop", (e) => void openPaths(e.payload.paths));
   void listen("close-requested", () => void closeApp());

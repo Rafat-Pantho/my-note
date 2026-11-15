@@ -17,10 +17,15 @@ use effects::{EffectsState, Mode, Status};
 /// Until the frontend is up, window close is not intercepted (nothing to protect yet).
 static FRONTEND_READY: AtomicBool = AtomicBool::new(false);
 
+/// `marks` is only a timing breakdown from the page (ms since navigation start); it is printed with
+/// MYNOTE_TIMING=1 and ignored otherwise.
 #[tauri::command]
-fn editor_ready() {
+fn editor_ready(marks: Option<String>) {
     FRONTEND_READY.store(true, Ordering::Relaxed);
     timing::report("editor ready");
+    if let Some(m) = marks {
+        timing::report(&format!("page marks: {m}"));
+    }
 }
 
 #[tauri::command]
@@ -124,9 +129,11 @@ fn refresh_appearance(app: &AppHandle) {
 }
 
 pub fn run() {
+    timing::report("run");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            timing::report("setup start");
             // First-launch state is solid (effects Off). Applied before the window is ever shown.
             let settings = config::load_settings(app.handle());
             let no_effects = std::env::args_os().any(|a| a == "--no-effects");
@@ -144,6 +151,7 @@ pub fn run() {
                     ));
                 }
             }
+            timing::report("setup done");
             Ok(())
         })
         .on_window_event(|window, event| match event {

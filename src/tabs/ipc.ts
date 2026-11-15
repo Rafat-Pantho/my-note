@@ -40,10 +40,14 @@ export const takeLaunchArgs = () => invoke<string[]>("take_launch_args");
 export const setTitle = (title: string) => invoke<void>("set_title", { title });
 export const exitApp = () => invoke<void>("exit_app");
 export const showWindow = () => invoke<void>("show_window");
-export const editorReady = () => invoke<void>("editor_ready");
+export const editorReady = (marks?: string) => invoke<void>("editor_ready", { marks });
 
-export async function loadSession(): Promise<unknown | null> {
-  const buf = await invoke<ArrayBuffer>("load_session");
+/** The raw session file (empty if there is none). Decoding is separate from loading. */
+export const loadSessionBytes = (full: boolean) => invoke<ArrayBuffer>("load_session", { full });
+/** Rust answers a big session file with one marker byte; ask again with `full` after the first paint. */
+export const isSessionLarge = (b: ArrayBuffer) => b.byteLength === 1 && new Uint8Array(b)[0] === 0x4c;
+
+export function decodeSession(buf: ArrayBuffer): unknown | null {
   if (buf.byteLength === 0) return null;
   try {
     return JSON.parse(decoder.decode(buf));
