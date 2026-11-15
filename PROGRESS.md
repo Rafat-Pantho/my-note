@@ -8,7 +8,7 @@
 - [x] M4 AI connection layer (environments, consent gate, model lists, streaming plumbing, Test connection)
 - [x] M5 AI actions, preview and rollback
 - [x] M6 Performance pass (see docs/PERFORMANCE.md)
-- [ ] M7
+- [x] M7 GitHub builds and releases (CI workflow, draft release workflow, portable zip, SHA256SUMS; see below)
 - [ ] M8
 - [ ] M9
 
@@ -165,3 +165,24 @@
 - M6 done. Open items from M5: click-test the saved-preset form in Settings, Regenerate and Copy; a real chat against each provider; a model-context lookup for Ollama (`/api/show`) instead of the fixed 32k cap; consider saving rollback history with the session.
 - Open: re-run the text-legibility screenshots in both themes at 50%; test `--no-effects` and Reduce effects at runtime; try Windows 10 / 11 21H2 / macOS / Linux if available.
 
+
+## M7 GitHub builds and releases
+- `.github/workflows/ci.yml` (PRs, pushes to main/master): `npm ci`, `tsc`, `npm test`, `vite build`; Rust on Windows and Ubuntu 22.04: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`. No release.
+- `.github/workflows/release.yml` (tags `v*`, manual dispatch): `prepare` (tag), `draft` (creates ONE draft release so matrix jobs don't race), `build` matrix (Windows x64, macOS aarch64 + x86_64, Ubuntu 22.04) via `tauri-apps/tauri-action@v0`, then `checksums` (SHA256SUMS of every release file).
+- Portable: `My-Note_<ver>_windows-x64-portable.zip` (the plain exe zipped), attached by the Windows build job.
+- Permissions: workflow default `contents: read`; `draft`, `build` and `checksums` jobs request `contents: write`.
+- Caches: npm (setup-node) and Cargo (Swatinem/rust-cache). Actions pinned by major version; `dtolnay/rust-toolchain@stable` is the toolchain action (it has no version tags).
+- `bundle.active` is now `true` (targets all: NSIS, MSI, dmg/app, deb/rpm/AppImage). `--no-bundle` still builds the exe alone.
+- Windows installer: WebView2 `downloadBootstrapper` (default). The installer fetches WebView2 only when it is missing.
+- Not done: no auto-updater (`includeUpdaterJson: false`), no code signing (macOS builds are unsigned and unnotarized; Windows SmartScreen will warn).
+- Icons: still the Tauri scaffold defaults. needs real icon. `my-note-logo.jpg` in the repo root is not wired in (it would need converting to the icon set with `npx tauri icon`).
+- Not verified here: the workflows have not run on GitHub yet (no remote is configured in this clone). Local checks pass: tsc, npm test, vite build, cargo fmt, clippy `-D warnings`, cargo test (86 tests).
+
+## How to release
+1. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` to match, commit.
+2. `git tag v0.1.0` and `git push origin v0.1.0`. (Or run the Release workflow by hand from the Actions tab; it tags the commit with `v<version>`.)
+3. Wait for the Release workflow. It creates a draft release with the installers, the portable zip and SHA256SUMS.
+4. Check the files on the draft (names, sizes, a test install), then publish it on GitHub.
+
+## Next
+- M8 (per the plan).

@@ -1,0 +1,156 @@
+name: Release
+
+# Tag push (v*) or manual dispatch. Creates a DRAFT GitHub release; publish it by hand after checking the files.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Read-only by default. Each job that publishes requests contents: write itself.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release tag: ${TAG}"
+
+  draft:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - id: draft
+        name: Create the draft release once (matrix jobs attach to it)
+        run: |
+          ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -n1)
+          if [ -z "$ID" ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "My Note ${TAG}" --notes "Draft. Check the files, then publish."
+            ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -n1)
+          fi
+          echo "release_id=${ID}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [prepare, draft]
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            rust_targets: aarch64-apple-darwin
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            rust_targets: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Linux system packages (Tauri v2 prerequisites)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf build-essential curl wget file
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform }}-${{ matrix.rust_targets }}
+
+      - run: npm ci
+
+      - name: Build and attach installers to the draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ env.TAG }}
+          releaseId: ${{ env.RELEASE_ID }}
+          releaseDraft: true
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+      - name: Windows portable build (plain exe, zipped)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $zip = "My-Note_${version}_windows-x64-portable.zip"
+          Compress-Archive -Path src-tauri/target/release/my-note.exe -DestinationPath $zip -Force
+          $repo = $env:GITHUB_REPOSITORY
+          gh api --method POST "https://uploads.github.com/repos/$repo/releases/$env:RELEASE_ID/assets?name=$zip" `
+            -H "Content-Type: application/zip" --input $zip
+          if ($LASTEXITCODE -ne 0) { throw "upload of $zip failed" }
+
+  checksums:
+    needs: [prepare, draft, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+    steps:
+      - name: Hash every release file and attach SHA256SUMS
+        run: |
+          set -euo pipefail
+          REPO="$GITHUB_REPOSITORY"
+          DIR=$(mktemp -d)
+          cd "$DIR"
+          gh api "repos/${REPO}/releases/${RELEASE_ID}/assets" --paginate --jq '.[] | select(.name != "SHA256SUMS") | "\(.id) \(.name)"' > assets.txt
+          test -s assets.txt
+          while read -r AID NAME; do
+            gh api -H "Accept: application/octet-stream" "repos/${REPO}/releases/assets/${AID}" > "$NAME"
+          done < assets.txt
+          : > SHA256SUMS
+          while read -r _ NAME; do
+            sha256sum -- "$NAME" >> SHA256SUMS
+          done < <(sort -k2 assets.txt)
+          cat SHA256SUMS
+          # Replace an older SHA256SUMS from a re-run.
+          gh api "repos/${REPO}/releases/${RELEASE_ID}/assets" --paginate --jq '.[] | select(.name == "SHA256SUMS") | .id' | while read -r OLD; do
+            gh api --method DELETE "repos/${REPO}/releases/assets/${OLD}"
+          done
+          gh api --method POST "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=SHA256SUMS" \
+            -H "Content-Type: text/plain" --input SHA256SUMS
