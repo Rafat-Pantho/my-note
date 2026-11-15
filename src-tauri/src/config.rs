@@ -4,6 +4,7 @@
 //! changes apply in memory at once and are written (atomically) after a short debounce.
 
 use std::{
+    collections::BTreeMap,
     fs,
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -105,6 +106,8 @@ const MAX_FONT_FAMILY_LEN: usize = 200;
 pub const AUTO_SAVE_RANGE: (u32, u32) = (1, 600);
 pub const PRINT_MARGIN_RANGE: (u32, u32) = (0, 50);
 const MAX_PRINT_TEXT_LEN: usize = 200;
+const MAX_LANGUAGE_LEN: usize = 64;
+const MAX_DIR_LEN: usize = 1000;
 
 /// Header / footer text: plain text up to 200 characters, no control characters. None means invalid.
 fn sanitize_print_text(s: &str) -> Option<String> {
@@ -160,6 +163,15 @@ pub struct Settings {
     pub search_engine: String,
     /// Show the whole status bar (when off only the AI indicator stays: it must always be visible).
     pub status_bar: bool,
+    /// Spell check and autocorrect. Both apply only to tabs whose file type is switched on in `spell_types`.
+    pub spell_check: bool,
+    pub autocorrect: bool,
+    /// File type -> on/off (`spell::FILE_TYPES` lists the keys). Unknown keys are ignored.
+    pub spell_types: BTreeMap<String, bool>,
+    /// Dictionary id: `en_US` (built in) or the stem of a `.dic` + `.aff` pair in `spell_dict_dir`.
+    pub spell_language: String,
+    /// Folder the user chose for extra dictionaries ("" = none). Read only when the language list is asked for.
+    pub spell_dict_dir: String,
     /// Last opened files, newest first. Paths only, never contents. Changed only through the `recent_*`
     /// commands; saved in the file but not part of the settings payload or the generic patch.
     #[serde(skip)]
@@ -198,6 +210,11 @@ impl Default for Settings {
             open_in_new_window: false,
             search_engine: String::new(),
             status_bar: true,
+            spell_check: true,
+            autocorrect: true,
+            spell_types: crate::spell::default_types(),
+            spell_language: crate::spell::BUILTIN_ID.into(),
+            spell_dict_dir: String::new(),
             recent_files: Vec::new(),
             window: None,
             ai: AiConfig::default(),
@@ -225,6 +242,20 @@ fn sanitize_font_family(s: &str) -> Option<String> {
     let t = s.trim();
     let bad = |c: char| c.is_control() || matches!(c, ';' | '{' | '}' | '<' | '>' | '\\');
     (t.chars().count() <= MAX_FONT_FAMILY_LEN && !t.chars().any(bad)).then(|| t.to_string())
+}
+
+/// A dictionary id: the file stem of a `.dic` file, so letters, digits, `_`, `-` and `.` only.
+fn sanitize_language_id(s: &str) -> Option<String> {
+    let ok = !s.is_empty()
+        && s.chars().count() <= MAX_LANGUAGE_LEN
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+    ok.then(|| s.to_string())
+}
+
+/// A folder path: "" (none) or up to 1,000 characters with no control characters.
+fn sanitize_dir(s: &str) -> Option<String> {
+    (s.chars().count() <= MAX_DIR_LEN && !s.chars().any(char::is_control)).then(|| s.to_string())
 }
 
 fn from_value<T: serde::de::DeserializeOwned>(x: &serde_json::Value) -> Option<T> {
@@ -316,6 +347,31 @@ impl Settings {
         }
         if let Some(b) = get("statusBar").and_then(|x| x.as_bool()) {
             self.status_bar = b;
+        }
+        if let Some(b) = get("spellCheck").and_then(|x| x.as_bool()) {
+            self.spell_check = b;
+        }
+        if let Some(b) = get("autocorrect").and_then(|x| x.as_bool()) {
+            self.autocorrect = b;
+        }
+        if let Some(map) = get("spellTypes").and_then(|x| x.as_object()) {
+            for (k, v) in map {
+                if let (Some(on), Some(slot)) = (v.as_bool(), self.spell_types.get_mut(k)) {
+                    *slot = on;
+                }
+            }
+        }
+        if let Some(l) = get("spellLanguage")
+            .and_then(|x| x.as_str())
+            .and_then(sanitize_language_id)
+        {
+            self.spell_language = l;
+        }
+        if let Some(d) = get("spellDictDir")
+            .and_then(|x| x.as_str())
+            .and_then(sanitize_dir)
+        {
+            self.spell_dict_dir = d;
         }
     }
 
@@ -770,6 +826,51 @@ mod tests {
         assert_eq!(s.font_size, 48); // clamped
         assert_eq!(s.tab_size, 1); // clamped
         assert!(!s.restore_session);
+    }
+
+    #[test]
+    fn spelling_defaults_and_validation() {
+        let mut s = Settings::default();
+        assert!(s.spell_check && s.autocorrect);
+        assert_eq!(s.spell_language, "en_US");
+        assert_eq!(s.spell_dict_dir, "");
+        let on: Vec<&str> = s
+            .spell_types
+            .iter()
+            .filter(|(_, v)| **v)
+            .map(|(k, _)| k.as_str())
+            .collect();
+        assert_eq!(on, ["markdown", "text", "untitled"]); // everything else off
+        assert_eq!(s.spell_types.len(), 7);
+
+        // A partial patch changes only the keys it names; unknown keys and non-booleans are ignored.
+        s.merge_json(&serde_json::json!({
+            "spellTypes": { "code": true, "markdown": false, "bogus": true, "web": "yes" },
+            "spellCheck": false, "autocorrect": "no",
+        }));
+        assert!(s.spell_types["code"] && !s.spell_types["markdown"] && s.spell_types["text"]);
+        assert!(!s.spell_types.contains_key("bogus") && !s.spell_types["web"]);
+        assert!(!s.spell_check && s.autocorrect);
+
+        // Language ids are file stems; folders have no control characters.
+        s.merge_json(&serde_json::json!({ "spellLanguage": "bn_BD", "spellDictDir": "D:/dicts" }));
+        assert_eq!(s.spell_language, "bn_BD");
+        assert_eq!(s.spell_dict_dir, "D:/dicts");
+        for bad in ["", "a/b", "../x", "x y", "a;b"] {
+            s.merge_json(&serde_json::json!({ "spellLanguage": bad }));
+            assert_eq!(s.spell_language, "bn_BD", "{bad:?}");
+        }
+        s.merge_json(&serde_json::json!({ "spellDictDir": "bad\ndir" }));
+        assert_eq!(s.spell_dict_dir, "D:/dicts");
+        s.merge_json(&serde_json::json!({ "spellDictDir": "" })); // clearing is allowed
+        assert_eq!(s.spell_dict_dir, "");
+
+        // It survives the file round trip.
+        let bytes = s.to_file_bytes().unwrap();
+        let mut back = Settings::default();
+        back.merge_json(&serde_json::from_slice(&bytes).unwrap());
+        assert_eq!(back.spell_types, s.spell_types);
+        assert_eq!(back.spell_language, "bn_BD");
     }
 
     #[test]

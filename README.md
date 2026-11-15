@@ -15,6 +15,7 @@ Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. N
 - Find and replace, go to line, print, zoom, word wrap.
 - Insert date and time (F5).
 - Session restore: unsaved tabs come back after a restart or a crash.
+- Spell check (red wavy underline, right-click suggestions, Add to dictionary, Ignore) and autocorrect of common typos, both offline and switchable per file type. English (US) is built in; other languages are Hunspell `.dic` + `.aff` files from a folder you choose (nothing is downloaded). Words in a writing system with no loaded dictionary, such as Bengali, are never underlined.
 - Themes (system, light, dark), font and tab settings in a Settings tab.
 - Optional transparency and blur, with a solid fallback, a Reduce effects setting and a `--no-effects` flag.
 - Optional AI actions (off by default): summarize, fix grammar, shorten, rewrite, change tone, translate, continue writing, or your own instruction. Results go to a preview first. Accept applies one undoable change and keeps a rollback history.
@@ -102,3 +103,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Third-party: the spell checker is the [spellbook](https://github.com/helix-editor/spellbook) crate (MPL-2.0). The built-in English dictionary is the SCOWL en_US Hunspell dictionary; its license is in [src-tauri/dict/en_US.LICENSE.txt](src-tauri/dict/en_US.LICENSE.txt).

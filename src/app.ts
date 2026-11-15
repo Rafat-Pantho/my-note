@@ -2,8 +2,10 @@ import { listen } from "@tauri-apps/api/event";
 import { redoDepth, undoDepth } from "@codemirror/commands";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import {
-  applyZoom, createEditor, makeState, setDirection, setFont, setPrefs, setUpdateHandler, withDirection, withPrefs,
+  NO_SPELL, applyZoom, createEditor, makeState, setDirection, setFont, setPrefs, setSpell, setUpdateHandler,
+  withDirection, withPrefs,
 } from "./editor/editor";
+import { spellKindFor } from "./editor/spelltypes";
 import type { AiController } from "./ai/controller";
 import { copyText, editorCommands, editorItems, hasSelection, showContextMenu } from "./editor/contextmenu";
 import { modal } from "./editor/dialog";
@@ -40,6 +42,10 @@ let settingsTab: Tab | null = null;
 let settingsPanel: SettingsPanel | null = null;
 /** The AI actions controller. Its code is a lazy chunk: null until the user first opens the AI menu. */
 let aiCtl: AiController | null = null;
+/** Spell check + autocorrect. Lazy chunk: null until a tab of an enabled file type has text. */
+let spellMod: typeof import("./editor/spell") | null = null;
+let spellLoading = false;
+let appliedSpell = "";
 // What the editor currently uses, to apply only real changes (a slider fires many updates).
 let appliedTab = 8;
 let appliedCtrl = false;
@@ -143,6 +149,31 @@ function onUpdate(u: ViewUpdate) {
     scheduleAutoSave();
   }
   if (u.docChanged || u.selectionSet) refreshCursor();
+  if (u.docChanged && !spellMod) void syncSpell(); // the first text in a tab that needs it loads the chunk
+}
+
+/** Makes the live view match the settings: spell check and autocorrect for the file type of this tab, or
+ *  nothing. Costs nothing (no chunk, no dictionary) while both are off or the tab is empty. */
+async function syncSpell(): Promise<void> {
+  const tab = active;
+  const s = appearance()?.settings;
+  if (!tab || tab.kind === "settings" || !s) return;
+  const kind = s.spellCheck || s.autocorrect ? spellKindFor(tab.path, s.spellTypes) : null;
+  if (!spellMod) {
+    if (!kind || spellLoading || view.state.doc.length === 0) return;
+    spellLoading = true;
+    try {
+      spellMod = await import("./editor/spell");
+      spellMod.setNotifier(flash);
+    } catch {
+      return;
+    } finally {
+      spellLoading = false;
+    }
+  }
+  spellMod.configure({ spell: s.spellCheck, autocorrect: s.autocorrect, language: s.spellLanguage, dictDir: s.spellDictDir });
+  if (active !== tab) return void syncSpell(); // the user switched tabs while the chunk loaded
+  setSpell(view, kind ? spellMod.extensionFor(kind) : NO_SPELL);
 }
 
 /* ---------- tabs ---------- */
@@ -172,6 +203,7 @@ async function activate(tab: Tab): Promise<void> {
   document.getElementById("settings")!.hidden = !isSettings;
   refreshAll();
   if (!isSettings) view.focus();
+  void syncSpell();
   scheduleSession();
 }
 
@@ -498,6 +530,7 @@ async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
   }
   if (!tab.path || saveAs) void recentAdd(path).catch(() => {});
   tab.path = path;
+  if (tab === active) void syncSpell(); // the file type may have changed (Save as .py: no spell check)
   tab.name = basename(path);
   tab.dirty = false;
   tab.stamp = (await fileStamps([path]).catch(() => [null]))[0] ?? undefined;
@@ -625,6 +658,7 @@ async function reloadTab(tab: Tab) {
     view.setState(tab.state!);
     refreshAll();
     view.focus();
+    void syncSpell();
   }
   scheduleSession();
 }
@@ -732,19 +766,23 @@ async function openAiMenu(at?: HTMLElement | { x: number; y: number }) {
 }
 
 /** Replaces the webview's own right-click menu inside the text with ours (Notepad items + AI). */
-function onEditorContextMenu(e: MouseEvent) {
+async function onEditorContextMenu(e: MouseEvent) {
   e.preventDefault();
+  const { clientX: x, clientY: y } = e;
+  // On a misspelled word: suggestions, Add to dictionary, Ignore (nothing, instantly, anywhere else).
+  const spelling = spellMod ? await spellMod.contextItems(view, x, y, flash) : [];
   const quick = (id: "summarize" | "shorten" | "rewrite" | "grammar", label: string) => ({
     label: `AI: ${label}`,
     run: () => void ai().then((c) => c.runQuick(id)),
   });
   showContextMenu(
-    e.clientX,
-    e.clientY,
+    x,
+    y,
     [
+      ...spelling,
       ...editorItems(view, flash),
       { label: "", sep: true },
-      { label: "AI actions...", hint: "Ctrl+I", run: () => void openAiMenu({ x: e.clientX, y: e.clientY }) },
+      { label: "AI actions...", hint: "Ctrl+I", run: () => void openAiMenu({ x, y }) },
       quick("summarize", "Summarize"),
       quick("shorten", "Shorten"),
       quick("rewrite", "Rewrite (clearer)"),
@@ -774,6 +812,11 @@ function applySettings({ settings: s, ai }: Appearance) {
     }
     status.set({ wrap: s.wordWrap });
     scheduleSession();
+  }
+  const spellKey = JSON.stringify([s.spellCheck, s.autocorrect, s.spellTypes, s.spellLanguage, s.spellDictDir]);
+  if (spellKey !== appliedSpell) {
+    appliedSpell = spellKey;
+    void syncSpell();
   }
   if (s.autoSave !== appliedAuto) {
     appliedAuto = s.autoSave;
@@ -927,7 +970,7 @@ export async function boot() {
   );
   window.addEventListener("contextmenu", (e) => {
     const target = e.target as HTMLElement;
-    if (target.closest(".cm-content")) onEditorContextMenu(e);
+    if (target.closest(".cm-content")) void onEditorContextMenu(e);
     else if (!target.closest("input, textarea, #aipanel")) e.preventDefault();
   });
 

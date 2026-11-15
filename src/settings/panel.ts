@@ -3,7 +3,10 @@
  *  change applies live: the app listens with `onAppearance`. Controls re-sync from the settings Rust returns,
  *  so a value Rust clamped or rejected snaps back to what is really in effect. */
 import "./settings.css";
+import { invoke } from "@tauri-apps/api/core";
+import { FILE_TYPES } from "../editor/spelltypes";
 import { ENCODINGS, LINE_ENDINGS } from "../editor/statusbar";
+import { showInFolder } from "../tabs/ipc";
 import { type Appearance, type Settings, appearance, onAppearance, setAppearance } from "../theme/appearance";
 
 type Sync = (a: Appearance) => void;
@@ -12,6 +15,7 @@ type Keys<T> = { [K in keyof Settings]: Settings[K] extends T ? K : never }[keyo
 const SECTIONS = [
   ["general", "General"],
   ["appearance", "Appearance"],
+  ["spelling", "Spelling"],
   ["ai", "AI"],
 ] as const;
 
@@ -124,6 +128,82 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
     return c;
   };
 
+  /* ----- spelling: toggles, file types, dictionaries (the list is read from Rust when the section is shown) ----- */
+
+  const fileTypes = () => {
+    const box = el("div", "types");
+    for (const t of FILE_TYPES) {
+      const label = el("label", "type");
+      const c = el("input");
+      c.type = "checkbox";
+      c.onchange = () => void save({ spellTypes: { [t.id]: c.checked } });
+      syncs.push((a) => (c.checked = !!a.settings.spellTypes?.[t.id]));
+      const text = el("span", "", t.label);
+      if (t.hint) text.append(el("span", "hint", t.hint));
+      label.append(c, text);
+      box.append(label);
+    }
+    return box;
+  };
+
+  interface Lang {
+    id: string;
+    name: string;
+  }
+  const langSelect = el("select");
+  const fallbackLang = "en_US";
+  const showLanguage = (a: Appearance | null) => {
+    const want = a?.settings.spellLanguage ?? fallbackLang;
+    langSelect.value = [...langSelect.options].some((o) => o.value === want) ? want : fallbackLang;
+  };
+  const loadLanguages = async () => {
+    const langs = await invoke<Lang[]>("spell_languages").catch(() => [] as Lang[]);
+    langSelect.replaceChildren(...(langs.length ? langs : [{ id: fallbackLang, name: "English (United States), built in" }]).map((l) => new Option(l.name, l.id)));
+    showLanguage(appearance());
+  };
+  langSelect.onchange = () => void save({ spellLanguage: langSelect.value });
+  syncs.push(showLanguage);
+
+  const dictFolder = () => {
+    const wrap = el("span", "folder");
+    const where = el("span", "where");
+    const choose = el("button", "btn", "Choose folder...");
+    const clear = el("button", "btn", "Clear");
+    choose.onclick = async (e) => {
+      e.preventDefault();
+      const dir = await invoke<string | null>("spell_pick_dir").catch(() => null);
+      if (dir) {
+        await save({ spellDictDir: dir });
+        await loadLanguages();
+      }
+    };
+    clear.onclick = async (e) => {
+      e.preventDefault();
+      await save({ spellDictDir: "" });
+      await loadLanguages();
+    };
+    syncs.push((a) => {
+      const d = a.settings.spellDictDir;
+      where.textContent = d || "None";
+      where.title = d;
+      clear.hidden = !d;
+    });
+    wrap.append(where, choose, clear);
+    return wrap;
+  };
+
+  const personalNote = el("p", "note");
+  const personalButton = () => {
+    const b = el("button", "btn", "Show file");
+    b.onclick = async (e) => {
+      e.preventDefault();
+      const path = await invoke<string | null>("spell_personal_path").catch(() => null);
+      if (path) await showInFolder(path).catch(() => {});
+      else personalNote.textContent = "No words added yet. Right-click a misspelled word and choose Add to dictionary.";
+    };
+    return b;
+  };
+
   const effectMode = () => {
     const c = select("effects", [
       { label: "Off (solid)", value: "off" },
@@ -225,6 +305,18 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
       row("Reduce effects", checkbox("reduceEffects"), "Solid background, no animation"),
       effectsNote,
     ),
+    spelling: section(
+      "Spelling",
+      row("Spell check", checkbox("spellCheck"), "Red wavy underline and right-click suggestions"),
+      row("Autocorrect", checkbox("autocorrect"), "Fixes common typos when you press Space or Enter. Ctrl+Z undoes it"),
+      row("Language", langSelect, "Only dictionaries that are available are listed"),
+      row("Extra dictionaries", dictFolder(), "A folder with Hunspell .dic and .aff pairs (bn_BD.dic + bn_BD.aff). Nothing is downloaded"),
+      row("Your dictionary", personalButton(), "Words you added, one per line, in the config folder"),
+      personalNote,
+      el("h3", "", "Check spelling and autocorrect in"),
+      fileTypes(),
+      el("p", "note", "Words in a writing system that has no dictionary loaded (for example Bengali with the English dictionary) are never underlined."),
+    ),
     ai: section("AI", aiHost),
   };
 
@@ -235,6 +327,7 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
     for (const [k, p] of Object.entries(panels)) p.hidden = k !== id;
     for (const [k, b] of buttons) b.classList.toggle("on", k === id);
     if (id === "ai") loadAi();
+    if (id === "spelling") void loadLanguages();
   };
   for (const [id, label] of SECTIONS) {
     const b = el("button", "", label);

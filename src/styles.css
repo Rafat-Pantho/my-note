@@ -197,6 +197,7 @@ html.reduce-fx *, html.reduce-fx *::before, html.reduce-fx *::after { animation-
 .menu.ctx { min-width: 200px; }
 .menu.ctx button { display: flex; justify-content: space-between; gap: 24px; padding-left: 14px; }
 .menu.ctx .hint { color: var(--fg-dim); }
+.menu.ctx button.strong { font-weight: 600; }
 .menu.ctx .sep { height: 1px; margin: 4px 6px; background: var(--border); }
 #aibtn { font-weight: 600; }
 #app.on-settings #aibtn { display: none; }

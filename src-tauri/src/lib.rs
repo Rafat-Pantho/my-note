@@ -4,6 +4,7 @@ mod config;
 mod effects;
 mod files;
 mod keychain;
+mod spell;
 mod timing;
 
 use std::sync::{
@@ -260,6 +261,7 @@ pub fn run() {
             app.manage(SettingsState::new(settings.clone()));
             app.manage(EffectsState::new(no_effects));
             app.manage(ai::AiState::default()); // an empty map: no I/O, no network
+            app.manage(spell::SpellState::default()); // nothing loaded until a tab needs spell check
             app.manage(WindowTrack::default());
             if let Some(window) = app.get_webview_window("main") {
                 restore_window(&window, settings.window);
@@ -334,6 +336,13 @@ pub fn run() {
             ai::ai_delete_preset,
             ai::open_ollama_site,
             clipboard::clipboard_read,
+            spell::spell_check,
+            spell::spell_suggest,
+            spell::spell_add_word,
+            spell::spell_unload,
+            spell::spell_languages,
+            spell::spell_pick_dir,
+            spell::spell_personal_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running My Note");

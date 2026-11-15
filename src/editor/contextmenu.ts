@@ -12,6 +12,8 @@ export interface ContextItem {
   disabled?: boolean;
   /** A divider (no label needed). */
   sep?: boolean;
+  /** Drawn bold: the spelling suggestions. */
+  strong?: boolean;
 }
 
 export const hasSelection = (view: EditorView) => !view.state.selection.ranges.every((r) => r.empty);
@@ -89,6 +91,7 @@ export function showContextMenu(x: number, y: number, items: ContextItem[], onCl
     }
     const b = document.createElement("button");
     b.append(it.label);
+    if (it.strong) b.classList.add("strong");
     if (it.hint) {
       const k = document.createElement("span");
       k.className = "hint";

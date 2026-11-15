@@ -30,6 +30,13 @@ export interface Settings {
   /** "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL template with %s. */
   searchEngine: string;
   statusBar: boolean;
+  spellCheck: boolean;
+  autocorrect: boolean;
+  /** File type id -> on/off (see `FILE_TYPES` in editor/spelltypes.ts). */
+  spellTypes: Record<string, boolean>;
+  /** `en_US` (built in) or the stem of a .dic + .aff pair in `spellDictDir`. */
+  spellLanguage: string;
+  spellDictDir: string;
 }
 
 export interface EffectStatus {

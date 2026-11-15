@@ -30,6 +30,17 @@
 .st input[type=range]:disabled { opacity: 0.45; }
 .st output { min-width: 3em; text-align: right; color: var(--fg-dim); }
 
+.st h3 { margin: 20px 0 6px; font-size: 13px; font-weight: 600; }
+.st .types { display: flex; flex-direction: column; }
+.st .type { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.st .type input { margin-top: 1px; }
+.st .folder { display: flex; align-items: center; gap: 8px; justify-content: flex-end; min-width: 0; }
+.st .folder .where { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-dim); }
+.st button.btn { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; font: inherit; }
+.st button.btn:hover { background: var(--bg-hover); }
+
 @media (max-width: 560px) {
   .st-nav { width: 120px; }
   .st-main { padding: 16px; }

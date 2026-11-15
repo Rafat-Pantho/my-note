@@ -21,6 +21,9 @@ const wrapComp = new Compartment();
 const tabComp = new Compartment();
 const ctrlComp = new Compartment();
 const dirComp = new Compartment();
+/** Per-state spell check / autocorrect (the lazy chunk's extension, or nothing). */
+const spellComp = new Compartment();
+export const NO_SPELL: Extension = [];
 /** Holds extensions that are lazy-loaded (search). Empty until the find chunk loads. */
 const lazyComp = new Compartment();
 let lazyExt: Extension = [];
@@ -67,6 +70,7 @@ export function makeState(doc: string, wrap: boolean): EditorState {
       tabComp.of(EditorState.tabSize.of(tabSize)),
       ctrlComp.of(ctrlExt(showCtrl)),
       dirComp.of([]),
+      spellComp.of(NO_SPELL),
       keymap.of([
         { key: "Tab", run: insertTab },
         { key: "Shift-Tab", run: indentLess },
@@ -108,6 +112,14 @@ export function setDirection(view: EditorView, rtl: boolean): void {
 
 export function withDirection(state: EditorState, rtl: boolean): EditorState {
   return state.update({ effects: dirComp.reconfigure(dirExt(rtl)) }).state;
+}
+
+/** The spell extension a state currently has. */
+export const spellOf = (state: EditorState): Extension => spellComp.get(state) ?? NO_SPELL;
+
+/** Turns spell check / autocorrect on the live view on or off (`NO_SPELL`). Does nothing if already so. */
+export function setSpell(view: EditorView, ext: Extension): void {
+  if (spellOf(view.state) !== ext) view.dispatch({ effects: spellComp.reconfigure(ext) });
 }
 
 /** Font settings: size in px at 100% zoom, and the user's font-family list ("" = built-in stack). */
