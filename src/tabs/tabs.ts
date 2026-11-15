@@ -1,4 +1,5 @@
 import type { EditorState } from "@codemirror/state";
+import type { Change, Stamp } from "./external";
 
 export interface Tab {
   id: number;
@@ -11,6 +12,14 @@ export interface Tab {
   lineEnding: string;
   /** The single Settings tab: no document, never saved or restored. */
   kind?: "settings";
+  /** File time and size when last read or saved; the "changed on disk" check compares against it. */
+  stamp?: Stamp;
+  /** What the last focus check found, until the user has answered it. */
+  external?: Change;
+  /** The stat that found it; becomes `stamp` when the user keeps their version or dismisses. */
+  extStamp?: Stamp;
+  /** Right-to-left reading order for this tab (not saved with the session). */
+  rtl?: boolean;
   /** Untitled tab whose changes were thrown away at app close; not restored. */
   discarded?: boolean;
 }

@@ -17,6 +17,15 @@ export interface Settings {
   /** 0.5 to 1.0, applied to the background layer only. */
   opacity: number;
   reduceEffects: boolean;
+  autoSave: boolean;
+  /** Seconds without typing before auto-save (1 to 600). */
+  autoSaveSeconds: number;
+  showControlChars: boolean;
+  printMarginMm: number;
+  printLandscape: boolean;
+  /** Header / footer codes: &f file name, &p page, &P pages, &d date, &l &c &r alignment. */
+  printHeader: string;
+  printFooter: string;
   openInNewWindow: boolean;
   /** "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL template with %s. */
   searchEngine: string;

@@ -302,6 +302,7 @@ pub fn run() {
             files::write_file,
             files::pick_open_files,
             files::pick_save_path,
+            files::file_stamps,
             files::search_web,
             files::show_in_folder,
             files::new_window,

@@ -200,3 +200,19 @@ html.reduce-fx *, html.reduce-fx *::before, html.reduce-fx *::after { animation-
 .menu.ctx .sep { height: 1px; margin: 4px 6px; background: var(--border); }
 #aibtn { font-weight: 600; }
 #app.on-settings #aibtn { display: none; }
+
+/* ---------- changed-on-disk bar, visible control characters ---------- */
+#extbar { display: flex; align-items: center; gap: 8px; flex: none; padding: 5px 12px; background: var(--bg-pop);
+  border-bottom: 1px solid var(--border); }
+#extbar[hidden] { display: none; }
+#extbar span { flex: 1; }
+#extbar button { padding: 3px 12px; border: 1px solid var(--border); border-radius: 6px; transition: background var(--dur); }
+#extbar button:hover { background: var(--bg-hover-strong); }
+#app.on-settings #extbar { display: none; }
+.cm-ctrl { font: 0.62em var(--ui-font); padding: 0 3px; margin: 0 1px; border: 1px solid currentColor; border-radius: 3px;
+  color: var(--accent); vertical-align: middle; }
+/* page setup dialog */
+.modal.setup { width: 420px; }
+.modal.setup .grid { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+.modal.setup .grid input[type=text], .modal.setup .grid input[type=number], .modal.setup .grid select { width: 100%; margin: 0; }
+.modal.setup .codes { color: var(--fg-dim); font-size: 11px; line-height: 1.5; margin-bottom: 14px; }

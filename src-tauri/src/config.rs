@@ -102,6 +102,15 @@ pub const DEFAULT_OPACITY: f64 = 0.85;
 pub const FONT_SIZE_RANGE: (u32, u32) = (8, 48);
 pub const TAB_SIZE_RANGE: (u32, u32) = (1, 16);
 const MAX_FONT_FAMILY_LEN: usize = 200;
+pub const AUTO_SAVE_RANGE: (u32, u32) = (1, 600);
+pub const PRINT_MARGIN_RANGE: (u32, u32) = (0, 50);
+const MAX_PRINT_TEXT_LEN: usize = 200;
+
+/// Header / footer text: plain text up to 200 characters, no control characters. None means invalid.
+fn sanitize_print_text(s: &str) -> Option<String> {
+    (s.chars().count() <= MAX_PRINT_TEXT_LEN && !s.chars().any(char::is_control))
+        .then(|| s.to_string())
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -133,6 +142,17 @@ pub struct Settings {
     pub opacity: f64,
     /// Master switch: forces solid and turns off non-essential animation.
     pub reduce_effects: bool,
+    /// Save files that already have a path after `auto_save_seconds` without typing. Off by default.
+    pub auto_save: bool,
+    pub auto_save_seconds: u32,
+    /// Render zero-width and bidirectional control characters visibly.
+    pub show_control_chars: bool,
+    /// Page setup for printing: margin in mm, orientation, header and footer codes (&f name, &p page,
+    /// &P pages, &d date, &l &c &r alignment, && for an ampersand).
+    pub print_margin_mm: u32,
+    pub print_landscape: bool,
+    pub print_header: String,
+    pub print_footer: String,
     /// Open files from File > Open and Recent in a new window instead of a new tab.
     pub open_in_new_window: bool,
     /// Web search engine for Ctrl+E: "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL
@@ -168,6 +188,13 @@ impl Default for Settings {
             effects: Mode::Off,
             opacity: DEFAULT_OPACITY,
             reduce_effects: false,
+            auto_save: false,
+            auto_save_seconds: 5,
+            show_control_chars: false,
+            print_margin_mm: 20,
+            print_landscape: false,
+            print_header: "&f".into(),
+            print_footer: "Page &p".into(),
             open_in_new_window: false,
             search_engine: String::new(),
             status_bar: true,
@@ -250,6 +277,33 @@ impl Settings {
         }
         if let Some(r) = get("reduceEffects").and_then(|x| x.as_bool()) {
             self.reduce_effects = r;
+        }
+        if let Some(b) = get("autoSave").and_then(|x| x.as_bool()) {
+            self.auto_save = b;
+        }
+        if let Some(n) = get("autoSaveSeconds").and_then(|x| clamp_int(x, AUTO_SAVE_RANGE)) {
+            self.auto_save_seconds = n;
+        }
+        if let Some(b) = get("showControlChars").and_then(|x| x.as_bool()) {
+            self.show_control_chars = b;
+        }
+        if let Some(n) = get("printMarginMm").and_then(|x| clamp_int(x, PRINT_MARGIN_RANGE)) {
+            self.print_margin_mm = n;
+        }
+        if let Some(b) = get("printLandscape").and_then(|x| x.as_bool()) {
+            self.print_landscape = b;
+        }
+        if let Some(t) = get("printHeader")
+            .and_then(|x| x.as_str())
+            .and_then(sanitize_print_text)
+        {
+            self.print_header = t;
+        }
+        if let Some(t) = get("printFooter")
+            .and_then(|x| x.as_str())
+            .and_then(sanitize_print_text)
+        {
+            self.print_footer = t;
         }
         if let Some(b) = get("openInNewWindow").and_then(|x| x.as_bool()) {
             self.open_in_new_window = b;
@@ -979,6 +1033,32 @@ mod tests {
             "recentFiles": ["/evil"], "window": { "x": 0, "y": 0, "width": 500, "height": 500, "maximized": false }
         }));
         assert!(t.recent_files.is_empty() && t.window.is_none());
+    }
+
+    #[test]
+    fn a2_settings_have_safe_defaults_and_are_validated() {
+        let mut s = Settings::default();
+        assert!(!s.auto_save, "auto-save is off by default");
+        assert!(!s.show_control_chars && !s.print_landscape);
+        assert_eq!((s.print_margin_mm, s.auto_save_seconds), (20, 5));
+        assert_eq!(
+            (s.print_header.as_str(), s.print_footer.as_str()),
+            ("&f", "Page &p")
+        );
+        s.merge_json(&serde_json::json!({
+            "autoSave": true, "autoSaveSeconds": 9999, "showControlChars": true,
+            "printMarginMm": 90, "printLandscape": true,
+            "printHeader": "&l&f&r&d", "printFooter": "x\ny"
+        }));
+        assert!(s.auto_save && s.show_control_chars && s.print_landscape);
+        assert_eq!(s.auto_save_seconds, 600); // clamped
+        assert_eq!(s.print_margin_mm, 50); // clamped
+        assert_eq!(s.print_header, "&l&f&r&d");
+        assert_eq!(s.print_footer, "Page &p"); // control character rejected, old value stays
+        s.merge_json(&serde_json::json!({ "autoSaveSeconds": 0, "printHeader": "" }));
+        assert_eq!((s.auto_save_seconds, s.print_header.as_str()), (1, ""));
+        s.merge_json(&serde_json::json!({ "printFooter": "x".repeat(201) }));
+        assert_eq!(s.print_footer, "Page &p");
     }
 
     #[test]

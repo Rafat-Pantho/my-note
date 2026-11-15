@@ -335,6 +335,35 @@ pub async fn pick_save_path(app: AppHandle, default_name: String) -> Option<Stri
         .and_then(path_string)
 }
 
+/// Modified time (ms since 1970) and size of a file: what the "changed on disk" check compares.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Stamp {
+    pub mtime_ms: u64,
+    pub size: u64,
+}
+
+pub fn stamp_of(path: &str) -> Option<Stamp> {
+    let m = fs::metadata(path).ok().filter(|m| m.is_file())?;
+    let mtime_ms = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis() as u64;
+    Some(Stamp {
+        mtime_ms,
+        size: m.len(),
+    })
+}
+
+/// One stat per path (null if the file is gone). Called when the window regains focus, never in a loop:
+/// there is no background file watcher.
+#[tauri::command]
+pub async fn file_stamps(paths: Vec<String>) -> Vec<Option<Stamp>> {
+    paths.iter().take(500).map(|p| stamp_of(p)).collect()
+}
+
 /* ---------- things that start another program, each only on a user action ---------- */
 
 /// Opens an http(s) address in the default browser. Nothing else is accepted (no file:, javascript:...).
@@ -435,6 +464,21 @@ pub fn new_window(paths: Vec<String>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stamp_changes_with_content_and_is_none_when_missing() {
+        let p = std::env::temp_dir().join(format!("mynote-stamp-{}.txt", std::process::id()));
+        let path = p.to_string_lossy().into_owned();
+        fs::write(&p, "one").unwrap();
+        let a = stamp_of(&path).unwrap();
+        assert_eq!(a.size, 3);
+        assert_eq!(stamp_of(&path), Some(a)); // same file, same stamp
+        fs::write(&p, "three").unwrap();
+        assert_eq!(stamp_of(&path).unwrap().size, 5);
+        fs::remove_file(&p).unwrap();
+        assert_eq!(stamp_of(&path), None);
+        assert_eq!(stamp_of(&std::env::temp_dir().to_string_lossy()), None); // a folder is not a file
+    }
 
     #[test]
     fn explorer_argument_is_one_quoted_select() {

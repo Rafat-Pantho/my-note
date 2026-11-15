@@ -1,17 +1,20 @@
 import { listen } from "@tauri-apps/api/event";
 import { redoDepth, undoDepth } from "@codemirror/commands";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { applyZoom, createEditor, makeState, setFont, setPrefs, setUpdateHandler, withPrefs } from "./editor/editor";
+import {
+  applyZoom, createEditor, makeState, setDirection, setFont, setPrefs, setUpdateHandler, withDirection, withPrefs,
+} from "./editor/editor";
 import type { AiController } from "./ai/controller";
 import { copyText, editorCommands, editorItems, hasSelection, showContextMenu } from "./editor/contextmenu";
 import { modal } from "./editor/dialog";
 import { createStatusBar } from "./editor/statusbar";
 import {
-  decodeSession, editorReady, exitApp, isSessionLarge, loadSessionBytes, newWindow, pickOpenFiles, pickSavePath,
+  decodeSession, editorReady, exitApp, fileStamps, isSessionLarge, loadSessionBytes, newWindow, pickOpenFiles, pickSavePath,
   readFile, recentAdd, recentClear, recentList, saveSession, searchWeb, setTitle, showInFolder, showWindow,
   takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
 import { ClosedTabs, closedEntry } from "./tabs/closed";
+import { compare, message, promptFor } from "./tabs/external";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
 import type { SettingsPanel } from "./settings/panel";
 import { type Tab, TabBar } from "./tabs/tabs";
@@ -39,7 +42,9 @@ let settingsPanel: SettingsPanel | null = null;
 let aiCtl: AiController | null = null;
 // What the editor currently uses, to apply only real changes (a slider fires many updates).
 let appliedTab = 8;
+let appliedCtrl = false;
 let appliedSize = 14;
+let appliedAuto = false;
 let appliedFamily = "";
 
 const bar = new TabBar(document.getElementById("tabs")!, {
@@ -135,6 +140,7 @@ function onUpdate(u: ViewUpdate) {
   if (u.docChanged) {
     if (!active.dirty) markDirty();
     else scheduleSession();
+    scheduleAutoSave();
   }
   if (u.docChanged || u.selectionSet) refreshCursor();
 }
@@ -160,6 +166,8 @@ async function activate(tab: Tab): Promise<void> {
     view.setState(tab.state!);
   }
   aiCtl?.onTabChange(tab);
+  hideExtBar();
+  void handleExternal(tab);
   document.getElementById("app")!.classList.toggle("on-settings", isSettings);
   document.getElementById("settings")!.hidden = !isSettings;
   refreshAll();
@@ -233,6 +241,7 @@ async function loadFromDisk(tab: Tab): Promise<boolean> {
   tab.state = t.state;
   tab.encoding = t.encoding;
   tab.lineEnding = t.lineEnding;
+  tab.stamp = t.stamp;
   return true;
 }
 
@@ -246,6 +255,7 @@ async function readIntoTab(path: string): Promise<Tab | null> {
       const f = await readFile(path, allowLarge);
       if (f.size > LARGE_FILE_MB * 1024 * 1024) await nextFrame(); // let the message paint
       const tab = makeTab({ path, name, text: f.text, encoding: f.encoding, lineEnding: f.lineEnding });
+      tab.stamp = (await fileStamps([path]).catch(() => [null]))[0] ?? undefined;
       status.message("");
       return tab;
     } catch (e) {
@@ -395,6 +405,19 @@ async function searchSelection() {
   }
 }
 
+async function pageSetup() {
+  const { openPageSetup } = await import("./editor/pagesetup");
+  await openPageSetup();
+  view.focus();
+}
+
+function toggleRtl() {
+  if (active.kind === "settings") return;
+  active.rtl = !active.rtl;
+  setDirection(view, active.rtl);
+  view.focus();
+}
+
 async function findStep(dir: 1 | -1) {
   (await import("./editor/find")).findStep(view, dir);
 }
@@ -421,7 +444,12 @@ async function loadMenus() {
       save: () => void saveTab(active, false),
       saveAs: () => void saveTab(active, true),
       saveAll: () => void saveAll(),
-      print,
+      print: () => void print(),
+      pageSetup: () => void pageSetup(),
+      controlChars: () => appearance()?.settings.showControlChars === true,
+      toggleControlChars: () => void setAppearance({ showControlChars: appearance()?.settings.showControlChars !== true }),
+      rtl: () => active.rtl === true,
+      toggleRtl,
       closeTab: () => void closeTab(active),
       closeWindow: () => void closeApp(),
       undo: () => edit().undo(),
@@ -472,6 +500,9 @@ async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
   tab.path = path;
   tab.name = basename(path);
   tab.dirty = false;
+  tab.stamp = (await fileStamps([path]).catch(() => [null]))[0] ?? undefined;
+  tab.external = undefined;
+  if (tab === active) hideExtBar();
   refreshTabs();
   refreshTitle();
   scheduleSession();
@@ -563,6 +594,115 @@ async function closeApp() {
   await exitApp();
 }
 
+/* ---------- changed on disk ---------- */
+
+function hideExtBar() {
+  const bar = document.getElementById("extbar")!;
+  bar.hidden = true;
+  bar.replaceChildren();
+}
+
+/** The user answered (or dismissed): what is on disk now is the new baseline, so it is not asked again. */
+function acceptDiskState(tab: Tab) {
+  tab.stamp = tab.external === "deleted" ? undefined : tab.extStamp;
+  tab.external = undefined;
+  tab.extStamp = undefined;
+}
+
+async function reloadTab(tab: Tab) {
+  if (!tab.path) return;
+  const t = await readIntoTab(tab.path);
+  if (!t) return;
+  tab.state = tab.rtl ? withDirection(t.state!, true) : t.state;
+  tab.encoding = t.encoding;
+  tab.lineEnding = t.lineEnding;
+  tab.stamp = t.stamp;
+  tab.dirty = false;
+  tab.external = undefined;
+  tab.extStamp = undefined;
+  if (tab === active) {
+    hideExtBar();
+    view.setState(tab.state!);
+    refreshAll();
+    view.focus();
+  }
+  scheduleSession();
+}
+
+/** Shows what the focus check found for `tab` (only the tab on screen is ever prompted). */
+async function handleExternal(tab: Tab) {
+  if (!tab.external || tab.kind === "settings" || tab !== active) return;
+  const prompt = promptFor(tab.external, tab.dirty);
+  const text = message(tab.name, prompt);
+  if (prompt === "ask") {
+    const r = await modal({ message: `${text}\nReload from disk, or keep your version?`, buttons: ["Reload", "Keep mine"] });
+    if (!tab.external) return; // answered meanwhile (saved)
+    if (r.button === "Reload") await reloadTab(tab);
+    else acceptDiskState(tab);
+    return;
+  }
+  const bar = document.getElementById("extbar")!;
+  const label = document.createElement("span");
+  label.textContent = text;
+  const buttons: HTMLButtonElement[] = [];
+  const add = (name: string, fn: () => void) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.onclick = fn;
+    buttons.push(b);
+  };
+  if (prompt === "bar-reload") add("Reload", () => void reloadTab(tab));
+  add("Dismiss", () => {
+    acceptDiskState(tab);
+    hideExtBar();
+    view.focus();
+  });
+  bar.replaceChildren(label, ...buttons);
+  bar.hidden = false;
+}
+
+let checkingExternal = false;
+/** Window regained focus: one stat per open file (there is no background watcher). */
+async function checkExternal() {
+  if (checkingExternal || restoring || document.querySelector(".modal-bg")) return;
+  checkingExternal = true;
+  try {
+    const list = tabs.filter((t) => t.path && t.state && t.kind !== "settings" && !t.discarded);
+    if (!list.length) return;
+    const now = await fileStamps(list.map((t) => t.path!)).catch(() => null);
+    if (!now) return;
+    list.forEach((t, i) => {
+      if (!t.stamp && now[i]) t.stamp = now[i]!; // restored with unsaved text: the baseline is the first look
+      const c = compare(t.stamp, now[i]);
+      if (c === "unchanged") return;
+      t.external = c;
+      t.extStamp = now[i] ?? undefined;
+    });
+    await handleExternal(active);
+  } finally {
+    checkingExternal = false;
+  }
+}
+
+/* ---------- auto-save ---------- */
+
+let autoTimer = 0;
+/** Restarts the idle countdown (setting: Auto-save, off by default). Only files that already have a path. */
+function scheduleAutoSave() {
+  clearTimeout(autoTimer);
+  const s = appearance()?.settings;
+  if (!s?.autoSave) return;
+  autoTimer = window.setTimeout(() => void autoSave(), s.autoSaveSeconds * 1000);
+}
+
+async function autoSave() {
+  if (document.querySelector(".modal-bg") || restoring) return scheduleAutoSave();
+  // A file that changed on disk is never overwritten behind the user's back.
+  for (const t of tabs.filter((x) => x.dirty && x.path && !x.external && x.kind !== "settings")) {
+    await saveTab(t, false);
+  }
+}
+
 /* ---------- AI ---------- */
 
 let flashTimer = 0;
@@ -624,13 +764,20 @@ function toggleWrap() {
 function applySettings({ settings: s, ai }: Appearance) {
   status.setAi(ai);
   document.getElementById("app")!.classList.toggle("no-status", !s.statusBar);
-  if (s.wordWrap !== prefs.wrap || s.tabSize !== appliedTab) {
+  if (s.wordWrap !== prefs.wrap || s.tabSize !== appliedTab || s.showControlChars !== appliedCtrl) {
     prefs.wrap = s.wordWrap;
     appliedTab = s.tabSize;
-    setPrefs(view, s.wordWrap, s.tabSize);
-    for (const t of tabs) if (t !== active && t.state) t.state = withPrefs(t.state, s.wordWrap, s.tabSize);
+    appliedCtrl = s.showControlChars;
+    setPrefs(view, s.wordWrap, s.tabSize, s.showControlChars);
+    for (const t of tabs) {
+      if (t !== active && t.state) t.state = withPrefs(t.state, s.wordWrap, s.tabSize, s.showControlChars);
+    }
     status.set({ wrap: s.wordWrap });
     scheduleSession();
+  }
+  if (s.autoSave !== appliedAuto) {
+    appliedAuto = s.autoSave;
+    scheduleAutoSave();
   }
   if (s.fontSize !== appliedSize || s.fontFamily !== appliedFamily) {
     appliedSize = s.fontSize;
@@ -670,8 +817,23 @@ async function openFind(replace: boolean) {
   m.openFind(view, replace);
 }
 
-function print() {
+async function print() {
   const el = document.getElementById("print")!;
+  const s = appearance()?.settings;
+  if (s) {
+    // Page setup: margins, orientation, header and footer as one @page rule (see editor/printcss.ts).
+    const { printCss } = await import("./editor/printcss");
+    let style = document.getElementById("printstyle");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "printstyle";
+      document.head.append(style);
+    }
+    style.textContent = printCss(
+      { marginMm: s.printMarginMm, landscape: s.printLandscape, header: s.printHeader, footer: s.printFooter },
+      { name: active.name, date: new Date().toLocaleDateString() },
+    );
+  }
   el.textContent = view.state.doc.toString();
   window.addEventListener("afterprint", () => (el.textContent = ""), { once: true });
   window.print();
@@ -710,7 +872,7 @@ function onKeyDown(e: KeyboardEvent) {
     case "f": return run(() => void openFind(false));
     case "h": return run(() => void openFind(true));
     case "g": return run(() => void gotoLine());
-    case "p": return run(print);
+    case "p": return run(() => void print());
     case "tab": return run(() => switchTab(e.shiftKey ? -1 : 1));
     case "pagedown": return run(() => switchTab(1));
     case "pageup": return run(() => switchTab(-1));
@@ -749,6 +911,7 @@ export async function boot() {
   if (args.length) await openPaths(args);
 
   window.addEventListener("keydown", onKeyDown, true);
+  window.addEventListener("focus", () => void checkExternal());
   document.getElementById("newtab")!.onclick = newTab;
   document.getElementById("settingsbtn")!.onclick = () => void openSettings();
   const aibtn = document.getElementById("aibtn")!;

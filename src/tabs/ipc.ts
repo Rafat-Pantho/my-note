@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { Stamp } from "./external";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
 
@@ -45,7 +47,9 @@ export const searchWeb = (query: string) => invoke<void>("search_web", { query }
 export const showInFolder = (path: string) => invoke<void>("show_in_folder", { path });
 /** Starts another window (a new process) that opens these files. */
 export const newWindow = (paths: string[]) => invoke<void>("new_window", { paths });
-export const takeLaunchArgs =() => invoke<string[]>("take_launch_args");
+/** Modified time and size of each file (null if gone). One stat each, only when the window regains focus. */
+export const fileStamps = (paths: string[]) => invoke<(Stamp | null)[]>("file_stamps", { paths });
+export const takeLaunchArgs = () => invoke<string[]>("take_launch_args");
 export const setTitle = (title: string) => invoke<void>("set_title", { title });
 export const exitApp = () => invoke<void>("exit_app");
 export const showWindow = () => invoke<void>("show_window");

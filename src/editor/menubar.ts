@@ -38,6 +38,7 @@ export interface Commands {
   saveAs(): void;
   saveAll(): void;
   print(): void;
+  pageSetup(): void;
   closeTab(): void;
   closeWindow(): void;
   undo(): void;
@@ -54,6 +55,10 @@ export interface Commands {
   selectAll(): void;
   dateTime(): void;
   searchWeb(): void;
+  controlChars(): boolean;
+  toggleControlChars(): void;
+  rtl(): boolean;
+  toggleRtl(): void;
   zoomIn(): void;
   zoomOut(): void;
   zoomReset(): void;
@@ -94,6 +99,7 @@ export function menuDefs(c: Commands): MenuDef[] {
         { label: "Save a&ll", run: c.saveAll },
         SEP,
         { label: "&Print...", hint: "Ctrl+P", disabled: !doc(), run: c.print },
+        { label: "Page set&up...", run: c.pageSetup },
         SEP,
         { label: "&Close tab", hint: "Ctrl+W", run: c.closeTab },
         { label: "Close wi&ndow", hint: "Alt+F4", run: c.closeWindow },
@@ -124,6 +130,8 @@ export function menuDefs(c: Commands): MenuDef[] {
           { label: "Date and &time", hint: "F5", disabled: d, run: c.dateTime },
           SEP,
           { label: "&Search web", hint: "Ctrl+E", disabled: sel, run: c.searchWeb },
+          SEP,
+          { label: "Rig&ht-to-left reading order", checked: c.rtl(), disabled: d, run: c.toggleRtl },
         ];
       },
     },
@@ -139,6 +147,7 @@ export function menuDefs(c: Commands): MenuDef[] {
           ],
         },
         { label: "&Status bar", checked: c.statusBar(), run: c.toggleStatusBar },
+        { label: "Show &control characters", checked: c.controlChars(), run: c.toggleControlChars },
         { label: "&Word wrap", hint: "Alt+Z", checked: c.wrap(), disabled: !doc(), run: c.toggleWrap },
       ],
     },
