@@ -205,3 +205,8 @@ All runs below drove the real release exe over the WebView2 debug port with real
 3. Wait for the Release workflow. It creates a draft release with the installers, the portable zip and SHA256SUMS.
 4. Check the files on the draft (names, sizes, a test install), then publish it on GitHub.
 
+
+## M9 README, license, contributing
+- Done: `README.md` (features, download and install from GitHub Releases, privacy, build from source, keyboard shortcuts from `src/app.ts`, unsigned-build SmartScreen note, screenshot placeholder), `LICENSE` (MIT, `[YOUR NAME]` placeholder, 2026), `CONTRIBUTING.md` (setup, test commands, rules from CLAUDE.md, budgets).
+- Decisions: only facts checked against the code. Ctrl+Tab left out (M1 notes say WebView2 may swallow it); Ctrl+PageUp/PageDown listed instead. Linux/macOS keychain wording kept generic.
+- Next: replace `[YOUR NAME]` in LICENSE; add screenshots; the GitHub URL is not set (no remote in this clone).
