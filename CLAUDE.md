@@ -22,6 +22,8 @@ Budgets (report real numbers, never silently relax them):
 - Scope rule: if text is selected, AI works on the selection; otherwise on the whole file. Always show which.
 - Effects: transparency and blur are optional (window-vibrancy crate), with a solid fallback, a Reduce effects setting, a --no-effects flag, and automatic fallback if the OS or the call fails.
 - Everything else should behave like Windows Notepad.
+- Markdown preview: sanitize all rendered HTML (no raw HTML, no scripts, no remote images by default). Open links only in the system browser after a confirm, and only for http, https and mailto. The strict CSP stays.
+- Spell check, Markdown, tables and preview are lazy-loaded and cost nothing unless the file type or a setting needs them.
 
 ## Code rules
 - TypeScript strict. cargo fmt and cargo clippy clean.

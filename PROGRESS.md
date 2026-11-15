@@ -1,30 +1,33 @@
 # Progress
 
 ## Milestones
-- [x] M0 Scaffold (Tauri v2 + Vite + vanilla TS + CodeMirror 6, hidden window shown after first paint, timing, release profile, CSP)
-- [x] M1 Notepad parity (tabs, files, encodings, line endings, session restore, find/replace, view, print)
-- [x] M2 Look and effects (themes, effects engine, opacity + tint, fallbacks, --no-effects, temporary View menu)
-- [x] M3 Settings panel (own lazy tab, versioned config.json, live apply, keychain commands, View menu removed)
-- [x] M4 AI connection layer (environments, consent gate, model lists, streaming plumbing, Test connection)
-- [x] M5 AI actions, preview and rollback
-- [x] M6 Performance pass (see docs/PERFORMANCE.md)
-- [x] M7 GitHub builds and releases (CI workflow, draft release workflow, portable zip, SHA256SUMS; see below)
-- [x] M8 Final QA (table below; one open finding)
-- [x] M9 README, license, contributing (three items left for the owner, see the M9 section)
-- [x] A1 Menus, recent files, tab and find extras (see the A1 section)
-- [x] A2 Text-handling extras (see the A2 section)
-- [x] A3 Spell check and autocorrect (see the A3 section)
-- [x] A4 Markdown mode (see the A4 section)
-- [x] A5 File associations and polish (see the A5 section)
-- [x] M10 Notepad gap audit (see the audit table)
-- [x] M11 App shell gaps (see the M11 section)
-- [x] M12 Windows and file behavior (see the M12 section)
-- [x] M13 Spell check and autocorrect: extension list, wording (see the M13 section)
-- [x] M15 Regression check and docs (see the M15 section)
-- [x] M14 Page setup and print (see the M14 section)
+
+- [X] M0 Scaffold (Tauri v2 + Vite + vanilla TS + CodeMirror 6, hidden window shown after first paint, timing, release profile, CSP)
+- [X] M1 Notepad parity (tabs, files, encodings, line endings, session restore, find/replace, view, print)
+- [X] M2 Look and effects (themes, effects engine, opacity + tint, fallbacks, --no-effects, temporary View menu)
+- [X] M3 Settings panel (own lazy tab, versioned config.json, live apply, keychain commands, View menu removed)
+- [X] M4 AI connection layer (environments, consent gate, model lists, streaming plumbing, Test connection)
+- [X] M5 AI actions, preview and rollback
+- [X] M6 Performance pass (see docs/PERFORMANCE.md)
+- [X] M7 GitHub builds and releases (CI workflow, draft release workflow, portable zip, SHA256SUMS; see below)
+- [X] M8 Final QA (table below; one open finding)
+- [X] M9 README, license, contributing (three items left for the owner, see the M9 section)
+- [X] A1 Menus, recent files, tab and find extras (see the A1 section)
+- [X] A2 Text-handling extras (see the A2 section)
+- [X] A3 Spell check and autocorrect (see the A3 section)
+- [X] A4 Markdown mode (see the A4 section)
+- [X] A5 File associations and polish (see the A5 section)
+- [X] M10 Notepad gap audit (see the audit table)
+- [X] M11 App shell gaps (see the M11 section)
+- [X] M12 Windows and file behavior (see the M12 section)
+- [X] M13 Spell check and autocorrect: extension list, wording (see the M13 section)
+- [X] M15 Regression check and docs (see the M15 section)
+- [X] M14 Page setup and print (see the M14 section)
 
 ## v0.2.0 release notes (not tagged, not pushed)
+
 New since the first release (M10 to M14; A1 to A5 are listed in their own sections):
+
 - Save all has a shortcut: Ctrl+Alt+S (ignored while AltGr is active).
 - Recent files: last 10, a Settings switch turns the history off and clears it.
 - Status bar shows the total character count.
@@ -36,48 +39,58 @@ New since the first release (M10 to M14; A1 to A5 are listed in their own sectio
 - Open: M13 (native vs embedded spell check, extension list) waits for a decision.
 
 ## M15 Regression check (release exe, Windows 11 build 26300)
+
 Checks: `tsc` clean, `npm test` 210 pass, `cargo fmt --check` clean, `clippy -D warnings` clean, `cargo test` 122 pass, release build OK.
-| Measure | M6 / M8 | Post-M9 | Now | Change vs M6/M8 |
-|---|---|---|---|---|
-| Exe | 6,010,368 (M8, 5.7 MB) | same | 6,971,904 (6.6 MB, budget 10 MB) | +16% vs M8: FLAG. Mostly the spell dictionary (+839 KB, A3), the rest Markdown glue, single-instance, print and menu code. Budget still met |
-| Initial JS gz | 98.9 kB | - | 106.6 kB (14,384 + 796 + 91,469; budget 300 KB) | +7.8%, under 10% |
-| Editor ready / shown, median of 5 | about 429-436 / 443-469 ms | 436 / 443 | 473 / 488 ms (ready 429-497, shown 443-517) | +8.5% / +10.2% vs post-M9: shown is on the 10% line, FLAG. The 400 ms budget was never met and still is not. Same machine, noisy hour; about 340 ms is WebView2 before our code |
-Lazy chunks (checked over the debug port on the real exe, resource list after startup): NOT loaded: page setup, print CSS, settings, panel, find, Markdown mode, preview, web search, AI controller, diff. Loaded: menubar (after first paint, by design) and spell + tokenize (only because the restored session had text; an empty first tab loads neither, A3). Outside connections: 0 for my-note.exe and every WebView2 process (netstat after 6 s, loopback excluded; the debug-port loopback is the only socket).
-Not run: macOS, Linux, Windows 10, a machine with the network unplugged.
+
+| Measure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | M6 / M8                    | Post-M9   | Now                                             | Change vs M6/M8                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- | --------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exe                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 6,010,368 (M8, 5.7 MB)     | same      | 6,971,904 (6.6 MB, budget 10 MB)                | +16% vs M8: FLAG. Mostly the spell dictionary (+839 KB, A3), the rest Markdown glue, single-instance, print and menu code. Budget still met                                     |
+| Initial JS gz                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 98.9 kB                    | -         | 106.6 kB (14,384 + 796 + 91,469; budget 300 KB) | +7.8%, under 10%                                                                                                                                                                |
+| Editor ready / shown, median of 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | about 429-436 / 443-469 ms | 436 / 443 | 473 / 488 ms (ready 429-497, shown 443-517)     | +8.5% / +10.2% vs post-M9: shown is on the 10% line, FLAG. The 400 ms budget was never met and still is not. Same machine, noisy hour; about 340 ms is WebView2 before our code |
+| Lazy chunks (checked over the debug port on the real exe, resource list after startup): NOT loaded: page setup, print CSS, settings, panel, find, Markdown mode, preview, web search, AI controller, diff. Loaded: menubar (after first paint, by design) and spell + tokenize (only because the restored session had text; an empty first tab loads neither, A3). Outside connections: 0 for my-note.exe and every WebView2 process (netstat after 6 s, loopback excluded; the debug-port loopback is the only socket). |                            |           |                                                 |                                                                                                                                                                                 |
+| Not run: macOS, Linux, Windows 10, a machine with the network unplugged.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                            |           |                                                 |                                                                                                                                                                                 |
 
 ## M14 Page setup and print
+
 Scope: most of this milestone existed from A2 (dialog, margins, orientation, header and footer through `@page` margin boxes, `&f &p &P &d &l &c &r &&`, lazy chunk, saved in config). Added only what the audit and the brief found missing.
 Checks: `tsc` clean, `npm test` 210 pass (+2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 122 pass (+1). Release exe 6,971,904 bytes (6.6 MB; +1,024 vs M12). Initial JS 14,384 + 796 + 91,469 = 106.6 kB gzipped (M12 106.6; budget 300 KB). Page setup chunk (lazy) 2.4 kB raw. Startup not re-measured: nothing here runs before the first print or the dialog.
 
 ### Done
+
 - Paper size: A4 (default), Letter, Legal. Setting `printPaper` (validated in Rust, unknown values ignored), dialog select, emitted as `size: A4 portrait` / `letter landscape` in the one `@page` rule; an unknown value falls back to A4.
 - `&t` time code (same short format as F5), tested.
 - Print follows the editor: font family and size from the Settings (size in points = px x 0.75), word wrap respected (`pre-wrap` when wrap is on, `pre` when off, so long lines are cut at the page edge instead of wrapped). Colours were already fixed black on white in the print CSS for every theme and effect mode.
 - Dialog help text states the limits (see below).
 
 ### What the print engine does (checked / not checked)
+
 - Checked in A2 on the real exe with `Page.printToPDF` (`preferCSSPageSize`): `@page` orientation, margins and the margin-box header and footer (file name, date, "Page 1 of 1") come out right. Not re-checked for paper size in M14 (the same rule carries it; Chromium honours `size:`), and I did NOT drive the native Edge print dialog.
 - Limits (also in the dialog): the print dialog has its own paper size, margins and "Headers and footers" option; they can override or double our values, so the user should pick the same paper size, Margins Default, and turn Edge's Headers and footers off if two appear. Runtimes without margin-box support print no header or footer; margins, size and orientation still work. macOS and Linux (WebKit) ignore margin boxes: header and footer will not print there (not tested).
 - Page count `&P` is the engine's `counter(pages)`.
 - Nothing is faked: no screen-side page preview and no own pagination.
 
 ### Manual checks (NOT run here)
+
 1. Page setup: pick Letter and Legal, landscape, margin 10; print to PDF: page size and orientation follow when the print dialog's paper size is the same.
 2. Header `&f &t`, footer `Page &p of &P &d`: values appear (check with the Edge dialog's Headers and footers on and off).
 3. Print with word wrap off and on; a long line; a font change in Settings; the light and dark themes and Blur on: print stays black on white.
 
 ## M13 result
+
 The brief was sent again unchanged after the note, so I took the recommended answers: keep the embedded checker (no new dependency or dictionary; sizes in A3), add the extension list, fix the wording.
 Checks: `tsc` clean, `npm test` 212 pass (spell type tests rewritten, +2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 123 pass (+1). Release exe 6,972,928 bytes (6.6 MB, budget 10 MB). Initial JS 13,806 + 796 + 91,469 = 106.1 kB gzipped (budget 300 KB; M15 106.6). Startup, 5 runs, ready / shown: 454/465, 465/476, 426/441, 420/431, 433/448 ms (median 433 / 448; the 400 ms budget is still NOT met). Outside connections still 0.
+
 - Spell check and autocorrect now follow an editable extension list (`spellExtensions`, default `txt (none)`; `(none)` = no extension), matched case-insensitively, dots and commas allowed. Saved files only; an unsaved tab follows the "Untitled tabs" switch. Never prose by name: Makefile, Dockerfile, `.gitignore`... match nothing. `.md` is now OFF by default (add `md` to turn it on; it then uses the Markdown tokenizer). Old per-type switches are gone from Settings (the Rust map keeps its keys; only `untitled` is read).
 - Settings > Spelling (a lazy section, not under General): wording now says autocorrect is a small built-in list of about 130 typos, never on pasted or AI text, and that spell check is built in, offline, nothing leaves the computer and nothing is downloaded.
 - Tests: extension parsing and matching, defaults (txt and no extension on; .log .json .js .ts .rs .toml .yaml .cfg .bat .sh .md off), untitled switch, edited list. Autocorrect boundary / skip-context tests already existed (`autocorrect.test.ts`); the Ctrl+Z step is a separate history event and was verified on the real exe in A3, not in a unit test.
 - Not done: suggestions from the native checker (impossible, see the note); a manual pass of the new settings UI in the real app was not run.
 
 ## M13 Spell check and autocorrect: feasibility note (stopped here, see "Needs a decision")
+
 Written at the start of M13, no code changed. Most of M13 already exists from A3 (see the A3 section); this note checks the brief against it.
 
 ### Native webview spell check
+
 - How to switch it on: set `spellcheck="true"` and `lang="en"` (or the user's language) on the `.cm-content` element (CodeMirror: `EditorView.contentAttributes.of({ spellcheck: "true", lang })`, in a compartment so it can follow the tab). Tested in A3 on the release exe: it works.
 - WebView2 (Windows, tested A3): uses the Windows spell checker with the languages installed in Windows. Under our launch args (`--host-resolver-rules="MAP * ~NOTFOUND"`, no outside network): squiggles still appear, so it needs no network and the args stay as they are. Cost +13 MB in the WebView2 process tree, no binary cost. Limits: our right-click menu replaces the webview menu, and there is no API to read suggestions, "Add to dictionary" or "Ignore"; so suggestions cannot be shown in our menu. It marks URLs and identifiers, and the language list is whatever Windows has.
 - WKWebView (macOS): built in (uses the system checker, NSSpellChecker; may call the system's own services but not our code). NOT tested here. Same limit: no suggestion API for a custom menu.
@@ -85,40 +98,47 @@ Written at the start of M13, no code changed. Most of M13 already exists from A3
 - Online service: none found on Windows (offline Windows checker; verified no outside connection with the launch args). I cannot verify what macOS does (system-level, not ours).
 
 ### What we ship instead (A3, already in the code)
+
 Embedded Hunspell: crate `spellbook` 0.4.2 (MPL-2.0) + the en_US dictionary inside the exe. Cost already reported in A3: exe +838,656 bytes (about 555 KB of it is the dictionary), initial JS +1.4 kB gz, spell chunk 4.8 kB gz lazy, memory +2.3 MB while loaded. It gives suggestions, Add to dictionary and Ignore in our own menu, works the same on every OS, and never touches the network. This is the "dictionary" the brief says to ask about first: it was added in A3, before this brief, with the numbers recorded there.
 
 ### Brief vs current code
-| Brief | Now |
-|---|---|
-| Spell check toggle, default on | Done (Settings > Spelling) |
+
+| Brief                                                                                                                   | Now                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spell check toggle, default on                                                                                          | Done (Settings > Spelling)                                                                                                                                                                                                              |
 | Per-extension list editor; defaults `.txt` and no extension; off for .log .json .js .ts .rs .toml .yaml .cfg .bat .sh | Partial: per file TYPE switches (Untitled, Plain text, Markdown on by default; Web, Data and config (includes .log), Source code, Other off), not an editable extension list. Markdown is on by default (the brief does not mention it) |
-| Suggestions in our menu | Done, through the embedded checker |
-| Autocorrect: small built-in table, word boundary, one Ctrl+Z, never in code, never on paste or AI text | Done: about 130 entries (the brief said a few dozen), Space or Enter, own undo step, skipped in code types, URLs, paths, identifiers, Markdown code; paste and AI text are not typed input, so they never trigger it |
-| Settings say it is a small built-in list | Not stated in the Settings text (to check / add) |
-| No text leaves the machine | True (checker is in-process; the settings panel does not say so) |
-| Settings under General, lazy | It is its own Settings > Spelling section, in the lazy Settings chunk |
-| Tests | Extension / type matching (`spelltypes.test.ts`), autocorrect (`autocorrect.test.ts`, boundaries, case, skipped contexts) and spell tokenizer exist; the Ctrl+Z step is checked on the real exe, not in a unit test |
+| Suggestions in our menu                                                                                                 | Done, through the embedded checker                                                                                                                                                                                                      |
+| Autocorrect: small built-in table, word boundary, one Ctrl+Z, never in code, never on paste or AI text                  | Done: about 130 entries (the brief said a few dozen), Space or Enter, own undo step, skipped in code types, URLs, paths, identifiers, Markdown code; paste and AI text are not typed input, so they never trigger it                    |
+| Settings say it is a small built-in list                                                                                | Not stated in the Settings text (to check / add)                                                                                                                                                                                        |
+| No text leaves the machine                                                                                              | True (checker is in-process; the settings panel does not say so)                                                                                                                                                                        |
+| Settings under General, lazy                                                                                            | It is its own Settings > Spelling section, in the lazy Settings chunk                                                                                                                                                                   |
+| Tests                                                                                                                   | Extension / type matching (`spelltypes.test.ts`), autocorrect (`autocorrect.test.ts`, boundaries, case, skipped contexts) and spell tokenizer exist; the Ctrl+Z step is checked on the real exe, not in a unit test                 |
 
 ### Needs a decision (answered by re-sending the brief; I took the recommended answers, see "M13 result")
+
 1. Is the embedded checker (already in the exe) acceptable? If you want native-only (no dictionary, no spellbook, about 0.8 MB smaller), suggestions, Add to dictionary and Ignore go away, because Windows exposes no suggestion API to our menu.
 2. Do you want the per-type switches replaced by (or extended with) an editable extension list with the brief's defaults? It is a small change: a `spellExtensions` string list in `config.json`, the list editor in Settings, and `fileTypeOf` replaced by an extension lookup. It would change today's defaults (Markdown off, `.log` stays off).
 3. Small wording fix: say in Settings that autocorrect is a small built-in list and that nothing leaves the machine.
 
 ## M12 Windows and file behavior
+
 Scope: the audit's Missing / Partial items (.LOG, read-only) plus two gaps found while checking items 1-2. New window, "Opening files" setting, single instance and changed-on-disk handling were already Done (A1, A2, A5) and were not rewritten. Item 4 differs from the brief on purpose: a clean tab shows the existing Reload / Dismiss bar (not a silent reload), because A2 chose a non-blocking bar so a reload never replaces text under the user's hands. Dirty and deleted files already behave as asked (dialog Reload / Keep mine; deleted: bar, text kept).
 Checks: `tsc` clean, `npm test` 208 pass (+4), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 121 pass (+1). Release exe 6,970,880 bytes (6.6 MB; +4,096 vs M11). Initial JS 14,297 + 796 + 91,469 = 106.6 kB gzipped by 1000 (M11 106.1; budget 300 KB). Startup, 7 runs, editor ready / shown medians 473 / 478 ms (range 455-497 / 462-518); M11's single run was 461 / 465. The 400 ms budget is still NOT met; our own part is unchanged (the new code only runs when a file opens or saves).
 
 ### Done
+
 - .LOG: when a file is opened (File > Open, Recent, launch args, Open with, drag-drop, not session restore and not Reload) and its first line is exactly `.LOG`, the caret goes to the end, a date and time line (F5 format, shared `dateTimeText`) is appended (a line break first only if the text does not end with one) and the tab is dirty. Setting `logTimestamp` (default on; Settings > General "Timestamp .LOG files"). Logic in `src/tabs/logfile.ts`.
 - Read-only: Rust `read_file` returns `readOnly` (file attribute / no write permission). The tab shows "Read-only" in the status bar; Save on such a tab asks "Save a copy under another name?" and goes to Save as. A write that fails with a permission error on a file that was writable when opened gets the same question. Save as clears the flag. Logic in `src/tabs/readonly.ts`. Reload refreshes the flag.
 - Ctrl+Shift+W closes the window (same path as File > Close window, with the save prompts); the menu label now shows it.
 - Open with while running: the `open-paths` event now goes through the same function as File > Open, so it follows "Open files in a new window" (a new process via `--new-window` when on and the window has content; otherwise a tab). No new single-instance cost: the plugin was already there (A5).
 
 ### Decisions
+
 - New window = a new process (`--new-window`), unchanged from A1: no second webview to keep warm, startup of the first window is untouched. Safety already in place: only the first window reads or writes `session.json`; extra windows start empty and never save the window geometry; `config.json` is written atomically (temp file and rename). Two windows share `config.json` and the last writer wins (the other window's change can be lost, never a corrupt file).
 - Read-only is decided when the file is read and again when a write fails; there is no polling.
 
 ### Manual multi-window checks (NOT run: nothing below was driven in the real app this milestone; only unit tests, a clean build and the startup timing)
+
 1. Ctrl+Shift+N: a second window opens empty; the first keeps its tabs. Close the second: the first window's session is unchanged after a restart.
 2. Ctrl+Shift+W closes the window; unsaved tabs ask first; Cancel keeps it open.
 3. Edit settings in window 1 and window 2 (different settings), close both: `config.json` is valid JSON; note which change survived (last writer wins).
@@ -129,38 +149,42 @@ Checks: `tsc` clean, `npm test` 208 pass (+4), `cargo fmt` and `clippy -D warnin
 8. Not testable here: macOS and Linux (read-only permission bits, `--new-window`), a file on a read-only network share, a second monitor.
 
 ## M11 App shell gaps
+
 Scope: only the audit's Partial / Missing items. Items 1 (menu bar), 2 (F3), 6 (tab menu), 7 (Ctrl+Shift+Tab) and the Status bar toggle were already Done and were not touched; New window and Page setup were already enabled, so they were not disabled.
 Checks: `tsc` clean, `npm test` 204 pass (+2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 120 pass (+1). Release exe 6,966,784 bytes (6.6 MB; +512 bytes vs A5). Initial JS (index + core + dist) 13,836 + 796 + 91,469 = 106.1 kB gzipped by 1000 (A5 106.2; budget 300 KB). Startup: only 1 of 7 scripted runs captured timing (the others did not start cleanly: WebView2 profile still locked by the killed process): editor ready 461 ms, shown 465 ms. Same range as A5 (458 / 483); the 400 ms budget is still NOT met.
 
 ### Done
+
 - Save all shortcut Ctrl+Alt+S (label in File menu). Ignored when AltGr is active (`getModifierState("AltGraph")`), so layouts that type characters with AltGr are not affected. Order (`src/tabs/saveall.ts`, tested): dirty file tabs in tab order, then untitled tabs one at a time through Save As; stops at the first cancel or failure (`saveTab` reports it).
 - Recent files: cap 20 -> 10; new setting `recentEnabled` (default on, Settings > General "Remember recent files"). Turning it off clears the list, stops recording and the menu shows nothing. Missing files are still skipped when the menu opens. Tests: cap, order, dedupe (existing), off switch (new).
 - Status bar: total characters ("N chars") from `doc.length`, no string built.
 
 ### Decisions
+
 - Recent entries beyond 10 in an old `config.json` are dropped on load (`parse_recent` caps).
 - Character count is UTF-16 code units (CodeMirror length): an emoji counts as 2.
 
 ## Notepad gap audit (M10, no code changed; found by searching the code)
 
-| # | Item | Status | Where |
-|---|------|--------|-------|
-| 1 | Menu bar (File, Edit, View) with shortcut labels | Done | `src/editor/menubar.ts`, commands in `src/app.ts` (`loadMenus`) |
-| 2 | F3 / Shift+F3, also with the find panel closed | Done | `src/app.ts` key handler (`findStep`) |
-| 3 | Save all (Ctrl+Alt+S) | Partial | File > Save all exists (`menubar.ts`, `saveAll` in `app.ts`); no shortcut: the key handler returns early when Alt is held (`app.ts` ~965); A1 left it out on purpose (AltGr clash) |
-| 4 | Recent files (menu, off switch, clear) | Partial | Menu, 20 entries, Clear list: done (`menubar.ts`, Rust `recent_*`). No off switch found in settings |
-| 5 | Status bar show/hide toggle | Done | View > Status bar (`menubar.ts`); AI indicator stays by design |
-| 6 | Total character count in status bar | Missing | `src/editor/statusbar.ts` shows Ln/Col, selected count, zoom, wrap, encoding, line ending only |
-| 7 | Tab right-click menu | Done | `showTabMenu` in `app.ts` (close, others, right, copy path, show in file manager, move to new window) |
-| 8 | New window, close window, open in tab or window setting | Done | Ctrl+Shift+N (`app.ts`), File > New window / Close window, Settings > General "Open files in a new window" |
-| 9 | .LOG first-line timestamp | Missing | No code for it (`.log` only appears in the spell-check file-type list) |
-| 10 | Changed-on-disk detection | Done | `src/tabs/external.ts`, Rust `file_stamps`, `handleExternal` in `app.ts` |
-| 11 | Read-only file handling | Missing | No read-only attribute check in Rust (`files`) and no read-only state in the editor or save path |
-| 12 | Spell check and autocorrect, per file type | Done | `src/editor/spell.ts`, `spelltypes.ts`, `autocorrect.ts`, Rust `spell.rs`, Settings > Spelling |
-| 13 | Page setup (paper size, orientation, margins, header, footer) | Partial | Orientation, margins, header, footer done (`src/editor/printcss.ts`, lazy dialog). No paper size choice (the print dialog / printer decides) |
-| 14 | Ctrl+Shift+Tab previous tab | Done | `case "tab"` with Shift in `app.ts` (~988); also Ctrl+PageUp/PageDown |
+| #  | Item                                                          | Status  | Where                                                                                                                                                                                      |
+| -- | ------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1  | Menu bar (File, Edit, View) with shortcut labels              | Done    | `src/editor/menubar.ts`, commands in `src/app.ts` (`loadMenus`)                                                                                                                      |
+| 2  | F3 / Shift+F3, also with the find panel closed                | Done    | `src/app.ts` key handler (`findStep`)                                                                                                                                                  |
+| 3  | Save all (Ctrl+Alt+S)                                         | Partial | File > Save all exists (`menubar.ts`, `saveAll` in `app.ts`); no shortcut: the key handler returns early when Alt is held (`app.ts` ~965); A1 left it out on purpose (AltGr clash) |
+| 4  | Recent files (menu, off switch, clear)                        | Partial | Menu, 20 entries, Clear list: done (`menubar.ts`, Rust `recent_*`). No off switch found in settings                                                                                    |
+| 5  | Status bar show/hide toggle                                   | Done    | View > Status bar (`menubar.ts`); AI indicator stays by design                                                                                                                           |
+| 6  | Total character count in status bar                           | Missing | `src/editor/statusbar.ts` shows Ln/Col, selected count, zoom, wrap, encoding, line ending only                                                                                           |
+| 7  | Tab right-click menu                                          | Done    | `showTabMenu` in `app.ts` (close, others, right, copy path, show in file manager, move to new window)                                                                                  |
+| 8  | New window, close window, open in tab or window setting       | Done    | Ctrl+Shift+N (`app.ts`), File > New window / Close window, Settings > General "Open files in a new window"                                                                               |
+| 9  | .LOG first-line timestamp                                     | Missing | No code for it (`.log` only appears in the spell-check file-type list)                                                                                                                   |
+| 10 | Changed-on-disk detection                                     | Done    | `src/tabs/external.ts`, Rust `file_stamps`, `handleExternal` in `app.ts`                                                                                                           |
+| 11 | Read-only file handling                                       | Missing | No read-only attribute check in Rust (`files`) and no read-only state in the editor or save path                                                                                         |
+| 12 | Spell check and autocorrect, per file type                    | Done    | `src/editor/spell.ts`, `spelltypes.ts`, `autocorrect.ts`, Rust `spell.rs`, Settings > Spelling                                                                                     |
+| 13 | Page setup (paper size, orientation, margins, header, footer) | Partial | Orientation, margins, header, footer done (`src/editor/printcss.ts`, lazy dialog). No paper size choice (the print dialog / printer decides)                                             |
+| 14 | Ctrl+Shift+Tab previous tab                                   | Done    | `case "tab"` with Shift in `app.ts` (~988); also Ctrl+PageUp/PageDown                                                                                                                  |
 
 ### Smallest design for each gap
+
 - 3 Save all shortcut: also accept Ctrl+Alt+S only when the key is the physical `KeyS` and AltGr is not active (`!e.getModifierState("AltGraph")`); one branch in the key handler, no new code or chunk.
 - 4 Recent off switch: one boolean `recentEnabled` in config (default on); when off, `recent_add` does nothing, the menu hides the submenu and "Clear list" stays. One Rust check, one Settings row.
 - 6 Character count: add `doc.length` to the status bar as "N chars", updated in the existing update-listener (no scan; CodeMirror keeps the length), shown only when the bar is visible; hide the field when narrow.
@@ -169,24 +193,29 @@ Checks: `tsc` clean, `npm test` 204 pass (+2), `cargo fmt` and `clippy -D warnin
 - 13 Paper size: add a `paperSize` select (A4, Letter, Legal, A3) to the existing Page setup dialog and emit `size: A4 landscape` in the same `@page` rule; about 10 lines, lazy chunk only.
 
 ## A5 File associations and polish
+
 Checks: `tsc` clean, `npm test` 202 pass, `cargo fmt` applied, `cargo clippy --all-targets -D warnings` clean, `cargo test` 119 pass (unchanged: no pure logic was added; the path helper is covered by the existing command-line flag tests only through the same code path). Release exe 6,966,272 bytes (6.6 MB, budget 10 MB; +4,096 bytes vs A4). Initial JS 106.2 kB gzipped (level 9, by 1000; A4 106.0; budget 300 KB). The `listen("open-paths")` line is the only frontend addition.
 
 ### Done
+
 - File associations: `bundle.fileAssociations` in `tauri.conf.json` for `txt` (text/plain), `md` + `markdown` (text/markdown) and `log` (text/plain), role Editor. The NSIS / MSI installers register them so *Open with* lists My Note. Nothing sets My Note as the default: no `default` flag, no registry write from our code.
 - Single instance: `tauri-plugin-single-instance` 2.5.5 (one new crate; no new transitive packages). A second launch with file paths (double-click, *Open with*) sends them to the running window through the event `open-paths`; the first window unminimizes, shows and focuses itself; the frontend opens the paths with the existing `openPaths` (new tab, or the existing tab if the file is already open). The second process exits at once with code 0. Relative paths are resolved against the second process's working directory.
 - The plugin is installed only in the first process. A window started with `--new-window` (File > New window, Move to new window) skips it, so it is never handed to the running window. Checked: `--new-window` starts a second process, and that process keeps running.
 - Docs: README features, file types, the shortcut table (Redo, Select all, Close window, the menu-only and tab-menu items) and the command-line notes now match A1 to A4. CI is unchanged: the new crate is pure Rust, so no new system packages are needed on the Ubuntu runner.
 
 ### Startup measurement (Windows 11 build 26300, release exe, MYNOTE_TIMING=1)
+
 - 10 runs, each started, read and killed after 3 s (PowerShell script). Medians: setup start 384 ms (range 356-588), setup done 396 ms, editor ready 458 ms (range 430-658), window shown 483 ms (range 445-683). Setup done to editor ready: median 66 ms (A4: about 67 ms, so our own part did not change).
 - The single-instance check runs in the Tauri builder, before `setup`; its cost sits in the interval from `run` (10-24 ms) to `setup start`, which is mostly WebView2 and window creation. I did not build an A4 exe again for a same-hour comparison, so the plugin's own cost is NOT isolated. The A4 medians (461 / 485 ms ready / shown, 16 runs on a noisier hour) are in the same range. The 400 ms budget is still NOT met.
 
 ### Decisions / limits
+
 - A second launch that carries no file just focuses the window (no new tab).
 - If a `--new-window` process is the last one open and the user double-clicks a file, that file starts a new first instance (the lock belongs to the first process only). Acceptable: the first window is the one that receives files.
 - File associations are written only by the installers. The portable zip does not register anything; double-click on a file works there only if Windows already associates the extension with My Note.
 
 ### QA scenarios to verify (A5)
+
 1. Install the NSIS (or MSI) build. Right-click a `.txt`, `.md`, `.markdown` and `.log` file: *Open with* lists My Note. The file's default program does not change (check *Default apps* in Windows Settings: My Note is not set).
 2. Double-click a `.txt` with the app CLOSED: one window opens with that file in its own tab; the title shows its name.
 3. Double-click a `.txt` with the app RUNNING (one window, with a file open): no second window appears; the second process exits; the existing window comes to the front (also when minimized) and the file opens in a new tab. The tab count goes up by one.
@@ -199,14 +228,17 @@ Checks: `tsc` clean, `npm test` 202 pass, `cargo fmt` applied, `cargo clippy --a
 10. Not tested: installer on a clean machine, uninstall (associations removed), macOS and Linux (`fileAssociations` mapped by Tauri, the single-instance plugin uses D-Bus on Linux and was never run), Windows 10, a file on a network drive, running as Administrator.
 
 ## A4 Markdown mode
+
 Checks: `tsc` clean, `npm test` 202 pass (105 + 97: lists 12, tables 18, format 12, links 3, sanitizer 48 (41 XSS fixtures + rendering), quote 2, AI + Markdown 2), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 119 pass (114 + 5 in `web`). Release exe 6,962,176 bytes (6.6 MB, budget 10 MB; +61,952 bytes vs A3: the link/image helper module and its tests of the existing HTTP client). Initial JS 106.0 kB gzipped by 1000 (103.5 by 1024; A3 104.1; budget 300 KB): +1.9 kB, all of it CodeMirror's `@codemirror/language` pieces that the Markdown chunk shares with `commands`, plus the compartment, the menu items and the hooks in `app.ts`. Lazy and NOT in `dist/index.html`: Markdown mode chunk 54.1 kB raw / 18.3 kB gz (+ 3.2 kB / 1.1 kB CSS), preview chunk (marked + DOMPurify) 82.9 kB / 27.9 kB gz. A non-Markdown tab requests neither (checked in the real app: the page's resource list has no `mode-` or `preview-` entry, no `#mdbar` and no `#mdpreview` element). Total cost for someone who uses Markdown with preview: 47.2 kB gz, fetched once from inside the exe (nothing from the network). Startup, 16 runs on a noisier hour than A3, editor ready / shown medians: 461 / 485 ms (A3 423 / 431; the part before our code, "setup done", was 390 ms vs 366 ms, so most of the difference is WebView2 or the machine; our own part, setup done -> ready, was about 67 ms vs 57 ms: I cannot prove from this that nothing changed). The 400 ms budget is still NOT met.
 
 ### Choices
+
 - Renderer: `marked` 18.2 (15.2 kB gz minified) over `markdown-it` 15.0 (41.3 kB gz minified, measured from the npm packages), plus DOMPurify 3.4 (11.7 kB gz). The source highlighter is `@lezer/markdown` (GFM tables, strikethrough, task lists) wired up directly with `@codemirror/language`. I first used `@codemirror/lang-markdown`, but it also bundles the HTML, CSS and JavaScript languages: its chunk was 237 kB raw / 90 kB gz against 54 kB / 18 kB now, so it was dropped (the cost: no highlighting of raw HTML inside Markdown; Enter in quotes is our own code).
 - New dependencies (all MIT unless noted; sizes are gzip, lazy): `marked` 15 kB, `dompurify` 12 kB (MPL-2.0 or Apache-2.0), `@lezer/markdown` + `@lezer/highlight` + `@codemirror/language` (shared with `commands`, a few kB), dev only: `jsdom` + `@types/jsdom` (the sanitizer tests need a DOM; 0 bytes shipped). Rust: none (`reqwest` and `rustls` were already there).
 - Folder: new `src/markdown/` (mode, preview, render, links, lists, tables, format, plus the test helper `fakeview.ts` that stands in for EditorView in Node). `src/editor/newline.ts` is a small facet so autocorrect's Enter can use the Markdown Enter (a typo fixed by Enter in a list item still gets the next bullet). Rust: new `web.rs`.
 
 ### Done
+
 - Markdown mode: automatic for `.md` and `.markdown`, a manual toggle for any tab (View > Markdown mode, Ctrl+Shift+M); the toggle wins over the file name for that tab; it is not saved in the session (a restored tab follows its file name again). Per tab: a compartment in the tab's editor state plus `tab.md`, `tab.mdManual`, `tab.mdView`.
 - Toolbar (only in Markdown tabs): Bold, Italic, Strikethrough | Heading menu (1-6, Normal text), Bulleted, Numbered | Link, Code, Quote, Table | Source / Split / Preview switch. Ctrl+B and Ctrl+I in the editor. Each button is one undoable change and writes Markdown only. Details: bold and italic combine (`***x***`) and come off one at a time, a caret in a word formats the word, selecting the marks also toggles, code over several lines becomes a fenced block, the same heading level again removes it, list / quote buttons toggle on every selected line, Link selects the address part to type (or turns a selected http(s) address into the target).
 - Ctrl+I conflict: in Markdown mode Ctrl+I is Italic and the AI menu is Ctrl+Shift+I (in the right-click menu, the AI button tooltip and the README); in every other tab Ctrl+I is still the AI menu. In Preview-only view (no editing) Ctrl+I still opens the AI menu.
@@ -217,6 +249,7 @@ Checks: `tsc` clean, `npm test` 202 pass (105 + 97: lists 12, tables 18, format 
 - AI: the actions work on the source text as before. In a Markdown tab the system prompt gets one more rule (keep headings, list markers and numbering, quotes, links and images, bold / italic / code, fences and pipe tables including every `|` and the separator row; no HTML). Accept replaces the source as one undoable change; the AI change does not trigger the table auto-align.
 
 ### Decisions / limits
+
 - The preview is a view of the source, never the other way round: no editing in the preview, no clickable checkboxes (they are disabled), no heading anchors / in-page `#links` (they render as plain text), relative links and local images are not resolved (a note shows instead: the page cannot read files).
 - Remote-image consent is kept per tab for the life of the tab (not saved), downloaded images are cached by address in memory (60 entries).
 - DNS names that resolve to a private address are not caught by `image_url_ok` (only literal hosts are); the request is a plain GET the user approved.
@@ -225,6 +258,7 @@ Checks: `tsc` clean, `npm test` 202 pass (105 + 97: lists 12, tables 18, format 
 - Not done: highlighting of embedded code languages in fences, math, footnotes, front matter, an outline, drag-and-drop of images, print of the rendered preview (Print still prints the source).
 
 QA scenarios to verify
+
 1. Open a `.md` file: the toolbar appears, headings / emphasis / code / links are coloured, the view is Source. Open a `.txt` file and an Untitled tab: no toolbar. Start the app with only non-Markdown tabs (Task Manager / the debug port): no Markdown or preview code is loaded.
 2. View > Markdown mode (or Ctrl+Shift+M) on a `.txt` tab turns the toolbar on, again turns it off. Save an Untitled tab as `x.md`: the toolbar appears; as `x.txt`: it goes.
 3. Select a word and use Bold, Italic, Strikethrough, Code, Link, Quote, Bulleted, Numbered and the Heading menu; each is one Ctrl+Z. Ctrl+B and Ctrl+I do the same from the keyboard (and Ctrl+I does NOT open the AI menu; Ctrl+Shift+I does). Select several lines and use Code (fenced block), the list buttons and Quote.
@@ -239,10 +273,13 @@ QA scenarios to verify
 Verified on the real release exe over the WebView2 debug port with real key events (throwaway scripts; app data backed up and restored afterwards): Markdown mode 41/41 (toolbar Bold with one-step undo, Ctrl+I and Ctrl+B, bullet / numbered / task continuation, Enter on empty item, Tab / Shift+Tab nesting, Table button and dialog, Tab through cells, auto-align after a pause, Tab adds a row, table context menu, Insert column right, saved file plain Markdown, Split / Preview / Source layout, preview of the table, Ctrl+Shift+I, the XSS file: no script ran, no `href` in the preview, only the https and mailto links clickable, nothing loaded for the remote image or the SVG data image, link and image consent dialogs, Rust refusing private image hosts and bad link schemes, Ctrl+Shift+M on a `.txt` tab, Ctrl+I still AI there); zero cost and a real image 7/7 (only non-Markdown tabs: no Markdown chunk, no toolbar, no preview element; Ctrl+B does nothing in a `.txt` tab; a real PNG from a public host loaded only after consent, downloaded by Rust, shown as a `data:` image, and the page made no external request); AI 7/7 against a mock OpenAI-compatible server (the request has the Markdown rule and the whole source with its table and link, nothing changes before Accept, Accept gives the corrected Markdown with headings, list, table and link untouched, one Ctrl+Z restores). Found by these runs and fixed: Tab did nothing when a cell's text was selected (it had required an empty selection); the first Markdown chunk was 90 kB gz (replaced the HTML-bundling language package); the test helper treated the first `|` of a document as the caret.
 
 ## A3 Spell check and autocorrect
+
 Checks: `tsc` clean, `npm test` 105 pass (85 + 20: tokenizer 9, autocorrect 9, file types 2), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 114 pass (101 + 13: spell 12, config 1). Release exe 6,900,224 bytes (6.6 MB, budget 10 MB; +838,656 bytes vs A2: about 555 KB is the en_US `.dic`/`.aff` inside the exe, the rest is spellbook + glue). Initial JS 104.1 kB gzipped by 1000 (101.7 by 1024; A2 102.7; budget 300 KB): +1.4 kB for the compartment, the file-type table and the hooks. The whole spell chunk (tokenizer, autocorrect rules and list, CodeMirror plugin) is 10.7 kB raw / 4.8 kB gz and is NOT in `dist/index.html`. Startup, 7 runs, editor ready / shown medians: 423 / 431 ms (A2 449 / 460 on a slower hour; same within noise; the 400 ms budget is still NOT met). A3 adds nothing to startup: an empty Untitled tab never loads the chunk or the dictionary.
 
 ### Decision: native webview spell check vs embedded Hunspell (measured on the release exe, Windows 11 build 26300, WebView2 157)
+
 Native test: set `spellcheck="true"` on the real `.cm-content`, typed misspellings with real input over the debug port, screenshotted.
+
 - It works on this OS: red wavy squiggles under tset / recieve / teh / wrold inside CodeMirror (and in a plain textarea / contenteditable). Cost: WebView2 process tree private memory +13 MB (225.8 -> 239.1 MB), no binary cost. Bengali words were not underlined (no Windows bn dictionary here), but that is up to the OS language list, not to us. The `--host-resolver-rules` network block does not matter to it (it uses the Windows spell checker, not downloaded dictionaries).
 - Why it is not enough: (1) there is no API to read its suggestions, and our right-click menu replaces the webview menu (it has to, for Cut/Copy/Paste/AI), so a right-click on a squiggle showed our menu with no suggestions, no Add to dictionary and no Ignore; letting the native menu through would drop the AI items. (2) Add to dictionary would live in the Edge profile, not in our config dir. (3) The language list is whatever Windows has installed: we cannot list only available dictionaries, load a `.dic`/`.aff` pair, or decide that Bengali is not checked. (4) WKWebView and WebKitGTK behave differently (and cannot be tested here). (5) It also marks URLs and identifiers we want to skip. Chosen: embedded.
 - Embedded: crate `spellbook` 0.4.2 exists on crates.io, licence MPL-2.0 (file-level copyleft; we do not modify it; notice added to the README), pure Rust, deps hashbrown + foldhash only. It has `check`, `suggest` and `add`, and honours ICONV and BREAK ("well-known", "mother-in-law", curly apostrophes are right: tested).
@@ -250,6 +287,7 @@ Native test: set `spellcheck="true"` on the real `.cm-content`, typed misspellin
 - Dictionary: SCOWL en_US 2020.12.07 as packaged by wooorm/dictionaries (49,568 entries, 552 KB `.dic`, permissive MIT/BSD-style licence kept in `src-tauri/dict/en_US.LICENSE.txt`). It is `include_str!`ed (costs address space, not RAM, until parsed) instead of a Tauri resource file, so the plain exe and the portable zip work with no files next to them. Fetched once at development time, never by the app.
 
 ### Done
+
 - Rust `src-tauri/src/spell.rs`: lazy `SpellState` (dictionary built on the first `spell_check`, on a blocking thread). Commands `spell_check` (words in, misspelled indices out, plus an `epoch` that changes whenever answers could change), `spell_suggest` (max 6), `spell_add_word`, `spell_unload`, `spell_languages`, `spell_pick_dir`, `spell_personal_path`. Script rule: the dictionary's script set is read from its own words (Latin for en_US); a word with a letter outside it (Bengali, Cyrillic, Han, or Latin mixed with Bengali) is never reported and gets no suggestions. Language ids are file stems; a folder pair needs both `.dic` and `.aff`; UTF-8, ISO-8859-1 and Windows-1252 (from `SET`) are decoded, any other charset gives a clear "convert it to UTF-8" message. A folder pair named `en_US` replaces the built-in entry; a chosen language that disappears falls back to the built-in one.
 - Personal dictionary: `user-dictionary.txt` in the config dir (next to `config.json`), one word per line, appended (a crash cannot lose older words), `#` comments allowed, loaded into the dictionary when it is built. A word may have letters, marks, digits, apostrophes and hyphens only (no `/`, which starts flags in a `.dic` line), at most 100 characters.
 - Settings (flat, validated in Rust): `spellCheck` (default on), `autocorrect` (on), `spellTypes` map (untitled, text, markdown on; web, data, code, other off), `spellLanguage` (`en_US`), `spellDictDir` ("").
@@ -261,6 +299,7 @@ Native test: set `spellcheck="true"` on the real `.cm-content`, typed misspellin
 - Settings > Spelling: Spell check and Autocorrect switches, language select (only the built-in dictionary and the complete pairs of the chosen folder), "Choose folder..." / Clear for extra dictionaries, "Show file" for the personal dictionary, one switch per file type.
 
 ### Decisions / limits
+
 - Beyond the CLAUDE.md module lists: Rust `spell.rs` (the checker lives in Rust) and, in `src/editor/`, `spell.ts`, `tokenize.ts`, `autocorrect.ts`, `spelltypes.ts` (no new frontend folder).
 - New dependency: `spellbook` 0.4 (+ `foldhash`, `hashbrown`): the Hunspell-compatible checker; size cost above.
 - "Idle chunks" = 300-word IPC calls with an idle callback before each, plus the debounce; tokenizing the visible lines is synchronous inside the idle callback (a few thousand characters). A 240,000-word file opened in 3 calls; typing in it produced no long task (50 ms or more); scrolling 300,000 px away checked the new place in 4 calls.
@@ -269,6 +308,7 @@ Native test: set `spellcheck="true"` on the real `.cm-content`, typed misspellin
 - The squiggle colour is fixed (`#e5484d`) in both themes. Suggestion order is spellbook's own (for "tset": stet, test, set ...).
 
 QA scenarios to verify
+
 1. Fresh start with an empty Untitled tab: no `spell-*.js` request and no dictionary (my-note.exe private memory about 8 MB). Type some text: the chunk loads, squiggles appear under real typos after a short pause, not under the word being typed.
 2. Right-click a squiggle: suggestions in bold, Add to dictionary, Ignore, then Undo/Cut/Copy/Paste and the AI items. Pick a suggestion: one Ctrl+Z puts the typo back. Right-click a correct word: only the normal menu.
 3. Add to dictionary: every copy of the word loses its squiggle, `user-dictionary.txt` (config folder) has the word, still accepted after a restart. Remove the line by hand and restart: the squiggle is back. Ignore: gone until the app restarts.
@@ -282,9 +322,11 @@ QA scenarios to verify
 Verified on the real release exe over the WebView2 debug port with real key events (throwaway scripts; app data backed up and restored afterwards). Scenario A 19/19: no chunk at startup, chunk on first text, squiggles, Space and Enter autocorrect with one-step undo, URL/path/identifier/e-mail exclusions, case, Bengali not underlined, menu content and order, suggestion replace + one undo, Ignore, Add to dictionary + file contents, normal-word menu. Scenario B 13/13: file types .txt/.py/.json/.md, Markdown exclusions, Settings > Spelling states and toggles including per-type, autocorrect and spell check independent. Big file 4/4: 240,000 words, 3 calls on open, no long task while typing, scroll far = 4 calls. Scenario C 7/7: folder dictionaries listed, Bengali test dictionary, Latin not underlined with it, broken-charset message, no retry loop, folder cleared. Test C found that a failed check was retried once per edit; fixed (no more checks until a setting changes). My first driver also lost typed dots (it sent them as the Delete key code); that was the script, not the app.
 
 ## A2 Text-handling extras
+
 Checks: `tsc` clean, `npm test` 85 pass (67 + 18: changed-on-disk logic 8, control-character names 3, print CSS 7), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 101 pass (99 + settings validation, file stamps). Release exe 6,061,568 bytes (5.8 MB, budget 10 MB; +13 KB). Initial JS 102.7 kB by 1000 (100.3 by 1024, gzipped; was 98.1 by 1024; budget 300 KB): index 12.6 + CodeMirror chunk 90.1 (it now includes `highlightSpecialChars`); the appearance chunk was merged into index. Page setup (0.9 kB gz) and print CSS (0.6 kB) are lazy. Startup, 7 runs, editor ready / shown medians: 449 / 460 ms (A1: 442 / 455): within noise; the 400 ms budget is still NOT met. A2 adds no work at startup (no stat, no timer until a file tab exists and the window regains focus).
 
 Done
+
 - External changes: when the window gets the `focus` event, ONE stat per open file tab (`file_stamps`: modified time + size; no watcher, no timer). Clean tab changed: non-blocking bar above the editor with Reload / Dismiss. Tab with unsaved edits: dialog Reload / Keep mine. File gone: bar with Dismiss only. Keep mine and Dismiss make the disk state the new baseline (not asked again until it changes again); our own saves refresh the stamp, so they never look external. A changed tab that is not on screen is prompted when it is activated. Logic: `src/tabs/external.ts` (`compare`, `promptFor`, `message`).
 - Auto-save (Settings > General, off by default, delay 1-600 s, default 5): after the idle delay saves every dirty tab that already has a path; never an untitled tab (no dialog), never a tab flagged as changed on disk. Session restore is separate and unchanged.
 - Show control characters (View menu + Settings): CodeMirror `highlightSpecialChars` plus our own list for what its default misses (ZWJ, ZWNJ, LRE/RLE/PDF, FSI, word joiner); each is drawn as a small labelled box (ZWJ, ZWNJ, LRM, RLM, RLO, BOM, U+0001...). Applies to every tab.
@@ -293,12 +335,14 @@ Done
 - Header and footer codes ARE feasible here: they are drawn with `@page` margin boxes (`@top-left` ... `@bottom-right`, `content: "text" counter(page)`), which the WebView2 / Chromium print engine supports. Checked by printing the real page to PDF over the debug port and reading it with `pdftotext`: landscape page, file name left, date right, "Page 1 of 1" centred. Not checked: the Edge print dialog's own "Headers and footers" checkbox (that is Edge's setting, separate from ours; if it is on, Edge may add its own header/footer next to ours), and other WebView2 versions (older runtimes without margin-box support would print no header/footer, margins and orientation would still work). On macOS/Linux (WebKit) margin boxes are not supported, so there the codes are ignored and only margins/orientation apply (not tested).
 
 Decisions / limits
+
 - "Focus" means the webview `window` focus event; a file changed while the app already has focus is noticed the next time focus returns. A tab restored from the session with unsaved text has no baseline stamp: its baseline is the first look at the file after the first focus event, so a change made between restore and that moment is not noticed.
 - Reload replaces the tab's document with a fresh state (undo history of that tab is dropped) and keeps its reading order.
 - Print uses the active tab's name for `&f`; the page count `&P` is the browser's `counter(pages)`.
 - Dependencies: none added.
 
 QA scenarios to verify
+
 1. Open a file, change it in another editor, switch back: bar appears (Reload loads it, Dismiss hides it and does not come back for the same change). Change it again: bar again.
 2. Same with unsaved typing in the tab: dialog Reload / Keep mine; Keep mine keeps your text; Reload drops it. Save afterwards: no prompt.
 3. Delete or rename the open file, switch back: "deleted or moved" bar with Dismiss. Then Save writes the file again.
@@ -312,9 +356,11 @@ QA scenarios to verify
 Verified on the real release exe over the WebView2 debug port (34 checks, all pass; throwaway scripts, app data backed up and restored afterwards): bar vs dialog vs deleted bar, Reload / Dismiss / Keep mine, baseline after answering, own save not reported, bar not blocking typing, auto-save timing and the untitled exception, Settings rows and defaults, control-character boxes (ZWJ, ZWNJ, LRM, RLM) on and off across tabs, RTL per tab, Page setup dialog and saved values, the injected `@page` rule and the printed PDF. The focus event was sent with `window.dispatchEvent(new Event("focus"))`, not by switching real windows. `window.print` was stubbed in the test (the native print dialog blocks the page); the PDF came from `Page.printToPDF` with `preferCSSPageSize`.
 
 ## A1 Menus, recent files, tab and find extras
+
 Checks: `tsc` clean, `npm test` 67 pass (60 + 7 closed-tab tests), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 99 pass (86 + 13). Release exe 6,048,768 bytes (5.8 MB, budget 10 MB; +38 KB). Initial JS 98.1 kB gz (index 9.99 + CodeMirror chunk 88.3 + appearance 2.2; budget 300 KB) + 2.7 kB CSS. The menu bar is its own lazy chunk (2.4 kB gz, fetched after the first paint); the engine dialog is another (0.6 kB gz). Startup (7 runs each, editor ready / shown, medians): 442 / 455 ms with no saved window, 429 / 445 ms with a saved window position (the restore cost is not measurable). Same as before A1 within noise; the 400 ms budget is still NOT met (see Open items after M8).
 
 Done
+
 - Menu bar: File, Edit, View + Settings gear at the right, built after the first paint (`requestAnimationFrame` + timeout, then a dynamic import). The row is reserved in the HTML so nothing shifts. Alt+F/E/V, arrow keys, Home/End, Enter/Space, underlined access keys inside menus, Right/Left switch menus, Escape, hover switching, submenus (Recent, Zoom). Code: `src/editor/menubar.ts`; every command lives in `app.ts` (`loadMenus`).
 - Recent files: last 20, newest first, no duplicates (case-insensitive on Windows), only paths in `config.json` (`recentFiles`), missing files skipped when the menu opens (not forgotten, so an unplugged drive does not wipe the list), "Clear list". Added on open (also launch args and drag-drop) and on first save / Save as. Rust: `push_recent`, `parse_recent`, `existing_recent`, commands `recent_list/add/clear`.
 - Setting "Open files in a new window" (Settings > General, default off) applies to File > Open and Recent. An empty window just takes the file.
@@ -325,6 +371,7 @@ Done
 - View: Zoom (in/out/restore), Status bar toggle, Word wrap.
 
 Decisions
+
 - Extra windows are new processes (`--new-window`, plus `--no-effects` if given). They start with no session, never read or write `session.json` and never save the window geometry, so the first window keeps ownership; they open 32 px down-right of the saved position. Consequences: unsaved text in an extra window is not restored after a crash; two windows share `config.json` and the last one to write wins (a recent-list entry from the other window can be lost).
 - NOT done: dragging a tab out of the window. A real tab-to-window transfer needs a second webview or a handoff of the tab text between processes, which is too heavy for the budgets. "Move to new window" is in the tab menu instead: it asks to save first (an untitled or unsaved tab must be on disk to move), opens the file in a new window and closes the tab here.
 - Exit and Close window do the same thing (close this window, with the save prompts): every window is its own process, so there is no "all windows" to exit.
@@ -335,6 +382,7 @@ Decisions
 - Dependencies: none added.
 
 QA scenarios to verify
+
 1. Alt+F, Alt+E, Alt+V open the menus; arrows, Enter, Escape and the underlined letters work; the gear opens Settings.
 2. File > Recent: newest first, a file deleted on disk is not listed, Clear list empties it, `config.json` holds only paths.
 3. Setting "Open files in a new window" on: File > Open and a recent file open another window; off: a new tab. With an empty untitled window, it opens in place either way.
@@ -350,39 +398,46 @@ QA scenarios to verify
 Verified on the real release exe over the WebView2 debug port (46 checks, all pass on the last two runs; throwaway scripts, app data backed up and restored afterwards): every menu item and shortcut label, keyboard and mouse navigation, the Zoom submenu, the Status bar toggle, recent order and skipping a missing file, opening a recent file, the tab menu (states for untitled / file / last tab, Copy file path read back from the clipboard, close-to-the-right with the unsaved prompt), reopen closed tab (with text, and the empty message), F3 / Shift+F3 / seeded Ctrl+F / Replace all count, the Ctrl+E dialog (cancel stores nothing, a custom URL without %s is refused, nothing selected says so), the Settings rows, open-in-new-window (a second process with `--new-window` and the file), Ctrl+Shift+N, window position/size restore (Win32 `MoveWindow` / `GetWindowRect`), maximized restore and an off-screen saved position. One earlier run had a single failure of "Alt+E opens Edit" that did not repeat in three later runs; cause not found (key timing in the driver is the likely one). NOT run: opening the browser for a real search (URL building is unit tested; `open_url` only accepts http/https), Show in file manager and Move to new window were not clicked on the real exe.
 
 ## M8 Final QA (release exe from `tauri build --no-bundle`, Windows 11 build 26300)
+
 Checks: `tsc` clean, `npm test` 60 pass, `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 86 pass, release build OK: exe 6,010,368 bytes (5.7 MB, budget 10 MB), initial JS unchanged from M6 (98.9 kB gz). Note: plain `cargo build --release` makes an exe that loads the dev URL (blank page); always use `npx tauri build --no-bundle`. No source changes were needed in M8.
 
 All runs below drove the real release exe over the WebView2 debug port with real key/text input (throwaway scripts, app data restored afterwards).
 
-| # | Scenario | Result | Notes |
-|---|----------|--------|-------|
-| 1 | Fresh launch, no network, no Ollama | PARTIAL | Works fully and our code makes no connection (see scenario 2: zero hits at startup in every state). NOT verified with the network actually unplugged (not possible here; this machine also has a real Ollama installed). FINDING: from the 2nd launch of any WebView2 profile, the WebView2 browser process (`msedgewebview2.exe --webview-exe-name=my-note.exe`, not our code) holds 1-2 established HTTPS connections to a Microsoft address (40.99.x / 52.98.x, no reverse DNS). First launch of a fresh profile: 0. Not stopped by `--disable-background-networking --disable-component-update --disable-sync --no-pings` or by `--host-resolver-rules="MAP * ~NOTFOUND..."`. Our frontend cannot be the source (CSP `connect-src` is IPC only, no frontend fetch). Cause and fix unknown; needs a packet capture or a firewall rule test. NOT FIXED. |
-| 2 | Logger on port 11434, AI off / denied / granted | PASS | The real Ollama owns 127.0.0.1:11434, so the logger listened on 127.0.0.2:11434 (still "local") with an Ollama environment pointing at it. Startup with config AI off / consent denied / consent unset / consent granted: 0 hits each. `ai_list_models`: off -> "AI is turned off", denied -> "You did not allow connections...", unset -> "Allow the connection ... first", all 0 hits. Granted: models ["qa-model:1b","second:7b"] returned, exactly 1 hit. Earlier (M4) the same gate was driven through the Settings UI against the real Ollama (19 models equal its own list). |
-| 3 | API key only in keychain | PASS | Added an environment and `ai_set_key` with a marker key: response and `ai_get` do not contain it (only `hasKey: true`); `config.json` has no key; no file under `%APPDATA%` or `%LOCALAPPDATA%\com.example.mynote` (incl. EBWebView) contains it; page DOM and localStorage do not; no command reads a key back (`key_get` etc. do not exist; only `key_set`, `key_delete`, `key_has`; the key is read inside Rust after the consent check). `key_has` true while stored; removing the environment removed it. NOT verified: the key in the Windows Credential Manager list by name (`cmdkey /list` filter printed nothing useful; M4 saw it there) and logs (the app writes none; nothing printed to stdout/stderr was captured). |
-| 4 | --no-effects, Reduce effects, GPU off | PASS | `--no-effects`: typing works, solid background, requesting Blur stays `active: off, reason: "--no-effects flag"`. Reduce effects on while Blur requested: `active: off, backend: solid, reason: "Reduce effects is on"`, typing works. `--disable-gpu` (WebView2 arg): typing works, solid. Blur (Acrylic) activates when allowed. NOT tested: OS "Transparency effects" off, high contrast, a real machine without a GPU. |
-| 5 | Encoding / line-ending round trips, 20 MB file | PASS | Opened from the command line, typed one character at the start, Ctrl+S, compared bytes with the expected result: UTF-8 LF, UTF-8 CRLF, UTF-8 BOM + CRLF, UTF-16 LE BOM + CRLF, UTF-16 BE BOM + LF all exact (BOM kept, line endings kept, status bar showed the right encoding / line ending). 20,971,582-byte CRLF file: usable text 680 ms after process start, a keystroke took 9 ms, saved byte-exact (size + 1). Windows-1252 and detection without BOM are covered by the Rust unit tests (`round_trips_every_encoding`, `detects_utf16_with_and_without_bom`), not re-run by hand. |
-| 6 | AI flow | PASS | Mock OpenAI-compatible server on 127.0.0.2, consent granted. No selection: badge "Whole file, 7 words"; with 7 characters selected: "Selection, 2 words" and the request held only `<text>teh cat</text>` (second line not sent). Document byte-identical while streaming and while the result waits. Reject: untouched. Replace selection: only the selection changed; ONE Ctrl+Z restored the original. Rollback list shows the entry; Restore returned the original text and was itself one undo step. Cancel mid-stream: panel closed, document untouched, server saw the connection close after 6 of 40 chunks. After Ctrl+Z the entry correctly shows "undone with Ctrl+Z" and cannot be restored (documented M5 behavior). Frontend tests (60) cover the same logic on real CodeMirror state. NOT verified: a real model (mock server only). |
-| 7 | Bengali text | PASS | Typed (CDP text input) conjuncts ক্ষ ত্র জ্ঞ স্ত্র দ্ধ ঙ্গ বিশ্ববিদ্যালয় কর্মক্ষেত্রে into a UTF-8 file; screenshot shows every conjunct shaped correctly (reordered vowel signs included). Saved as UTF-8, no BOM, no U+FFFD, text identical; reopened and rendered the same. NOT verified: pasting from another app, caret/selection stepping through conjuncts by keyboard, IME typing. |
-| 8 | Session restore after forced close | PASS | Edited a file tab (unsaved) and a second Untitled tab, waited 3 s, `taskkill /F /T`. Disk file untouched; on relaunch both tabs came back with the exact unsaved text (Bengali included). The 1.5 s write delay means edits in the last 1.5 s before a kill are lost (by design). |
+| # | Scenario                                        | Result  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| - | ----------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | Fresh launch, no network, no Ollama             | PARTIAL | Works fully and our code makes no connection (see scenario 2: zero hits at startup in every state). NOT verified with the network actually unplugged (not possible here; this machine also has a real Ollama installed). FINDING: from the 2nd launch of any WebView2 profile, the WebView2 browser process (`msedgewebview2.exe --webview-exe-name=my-note.exe`, not our code) holds 1-2 established HTTPS connections to a Microsoft address (40.99.x / 52.98.x, no reverse DNS). First launch of a fresh profile: 0. Not stopped by `--disable-background-networking --disable-component-update --disable-sync --no-pings` or by `--host-resolver-rules="MAP * ~NOTFOUND..."`. Our frontend cannot be the source (CSP `connect-src` is IPC only, no frontend fetch). Cause and fix unknown; needs a packet capture or a firewall rule test. NOT FIXED. |
+| 2 | Logger on port 11434, AI off / denied / granted | PASS    | The real Ollama owns 127.0.0.1:11434, so the logger listened on 127.0.0.2:11434 (still "local") with an Ollama environment pointing at it. Startup with config AI off / consent denied / consent unset / consent granted: 0 hits each. `ai_list_models`: off -> "AI is turned off", denied -> "You did not allow connections...", unset -> "Allow the connection ... first", all 0 hits. Granted: models ["qa-model:1b","second:7b"] returned, exactly 1 hit. Earlier (M4) the same gate was driven through the Settings UI against the real Ollama (19 models equal its own list).                                                                                                                                                                                                                                                                             |
+| 3 | API key only in keychain                        | PASS    | Added an environment and `ai_set_key` with a marker key: response and `ai_get` do not contain it (only `hasKey: true`); `config.json` has no key; no file under `%APPDATA%` or `%LOCALAPPDATA%\com.example.mynote` (incl. EBWebView) contains it; page DOM and localStorage do not; no command reads a key back (`key_get` etc. do not exist; only `key_set`, `key_delete`, `key_has`; the key is read inside Rust after the consent check). `key_has` true while stored; removing the environment removed it. NOT verified: the key in the Windows Credential Manager list by name (`cmdkey /list` filter printed nothing useful; M4 saw it there) and logs (the app writes none; nothing printed to stdout/stderr was captured).                                                                                                        |
+| 4 | --no-effects, Reduce effects, GPU off           | PASS    | `--no-effects`: typing works, solid background, requesting Blur stays `active: off, reason: "--no-effects flag"`. Reduce effects on while Blur requested: `active: off, backend: solid, reason: "Reduce effects is on"`, typing works. `--disable-gpu` (WebView2 arg): typing works, solid. Blur (Acrylic) activates when allowed. NOT tested: OS "Transparency effects" off, high contrast, a real machine without a GPU.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 5 | Encoding / line-ending round trips, 20 MB file  | PASS    | Opened from the command line, typed one character at the start, Ctrl+S, compared bytes with the expected result: UTF-8 LF, UTF-8 CRLF, UTF-8 BOM + CRLF, UTF-16 LE BOM + CRLF, UTF-16 BE BOM + LF all exact (BOM kept, line endings kept, status bar showed the right encoding / line ending). 20,971,582-byte CRLF file: usable text 680 ms after process start, a keystroke took 9 ms, saved byte-exact (size + 1). Windows-1252 and detection without BOM are covered by the Rust unit tests (`round_trips_every_encoding`, `detects_utf16_with_and_without_bom`), not re-run by hand.                                                                                                                                                                                                                                                                     |
+| 6 | AI flow                                         | PASS    | Mock OpenAI-compatible server on 127.0.0.2, consent granted. No selection: badge "Whole file, 7 words"; with 7 characters selected: "Selection, 2 words" and the request held only `<text>teh cat</text>` (second line not sent). Document byte-identical while streaming and while the result waits. Reject: untouched. Replace selection: only the selection changed; ONE Ctrl+Z restored the original. Rollback list shows the entry; Restore returned the original text and was itself one undo step. Cancel mid-stream: panel closed, document untouched, server saw the connection close after 6 of 40 chunks. After Ctrl+Z the entry correctly shows "undone with Ctrl+Z" and cannot be restored (documented M5 behavior). Frontend tests (60) cover the same logic on real CodeMirror state. NOT verified: a real model (mock server only).             |
+| 7 | Bengali text                                    | PASS    | Typed (CDP text input) conjuncts ক্ষ ত্র জ্ঞ স্ত্র দ্ধ ঙ্গ বিশ্ববিদ্যালয় কর্মক্ষেত্রে into a UTF-8 file; screenshot shows every conjunct shaped correctly (reordered vowel signs included). Saved as UTF-8, no BOM, no U+FFFD, text identical; reopened and rendered the same. NOT verified: pasting from another app, caret/selection stepping through conjuncts by keyboard, IME typing.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 8 | Session restore after forced close              | PASS    | Edited a file tab (unsaved) and a second Untitled tab, waited 3 s, `taskkill /F /T`. Disk file untouched; on relaunch both tabs came back with the exact unsaved text (Bengali included). The 1.5 s write delay means edits in the last 1.5 s before a kill are lost (by design).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ## Open items after M8
+
 - Scenario 1 finding: FIXED (see "Post-M9 fixes" below). Startup now makes 0 outside connections.
 - Startup budget (400 ms): still NOT met. The window now shows about 30-40 ms sooner (see below), but "editor ready" is unchanged and about 340 ms of it is WebView2 starting before any of our code runs. `--disable-gpu` default still undecided (no gain in "ready" today).
 
 ## Post-M9 fixes (2026-11-15, release exe, Windows 11 build 26300, WebView2 157.0.4341.46)
+
 - WebView2 network at startup. Found with a Chromium net log plus a socket list of the WebView2 process tree:
+
   1. `oneauth.dll` + `MicrosoftAccountWAMExtension.dll` load in the WebView2 browser process and open HTTPS to `substrate.office.com` / `outlook.office365.com` (40.99.x / 52.98.x / 40.104.x: the M8 finding). They use the Windows network stack, so they are not in the net log and `--host-resolver-rules` did not stop them. Disabling the Edge features `msOneAuthWAM` AND `msForceOneAuthWAM` (both needed; found by bisecting 15 candidates) stops it.
   2. Edge's config fetch (`config.edge.skype.com`), a Network Error Logging report (`ecs.nel.measure.office.net`) and WPAD proxy lookups, through Chromium's stack. Stopped by `--host-resolver-rules="MAP * ~NOTFOUND"`, `NetworkErrorLogging,Reporting` disabled and `--no-proxy-server`.
+
   - Fix: `additionalBrowserArgs` on the main window in `tauri.conf.json` (Windows only). It REPLACES wry's default args, so it repeats them (`msWebOOUI,msPdfOOUI,msSmartScreenProtection`, autoplay policy). The page never needs the network (custom protocol + IPC are served in-process; CSP already blocks fetch), and all AI HTTP is in Rust, so this blocks nothing we use.
   - Verified on the rebuilt exe with no env var: browser command line carries the flags; 3 launches x 10 s: 0 outside TCP connections from my-note.exe and every WebView2 process (before: 1-2 every launch); net log shows no successful outside request; typing works, no console errors.
   - Caveat: these are Edge-internal feature names and may change in a later WebView2 runtime. Re-check with a socket list after runtime updates.
 - Startup: the window is shown right after the editor is built instead of after two animation frames (a hidden WebView2 window does not paint, so the wait only delayed the show). Screen capture at the moment the window turns visible: the first frame already shows the painted editor, no blank or white frame.
+
   - Today, 7-9 runs each (this machine is slower today than in M6): before, ready 429 / shown 469 ms (medians); new flags alone, 428 / 487 (no change); both changes, ready 436 / shown 443. With `--disable-gpu` too: 433 / 444 and about 100 MB less private memory. So the visible window gained about 30 ms; "ready" did not move.
   - Process start times: WebView2 browser process at 65 ms, GPU/network at about 190, renderer at about 265, page at about 340; our `setup` takes 3 ms. What is left is the WebView2 runtime itself; nothing more to gain in our code without a different engine.
 - Checks: tsc clean, `npm test` 60 pass, cargo fmt / clippy `-D warnings` clean, `cargo test` 86 pass.
 - Not covered anywhere: macOS, Linux, Windows 10, real cloud-provider chats, GitHub workflows (never run).
 
 ## M6 results (release, Windows 11 build 26300) - full numbers and how to reproduce: docs/PERFORMANCE.md
+
 - startup, final 5 runs, editor ready / window shown: 407/455, 394/441, 388/432, 411/438, 399/447 ms (medians 399 / 441). Before the changes: median 389 / 437 (same within noise: normal sessions were already fast). The 400 ms budget is NOT reliably met: ready is on the line, the visible window is about 40 ms over. Not relaxed.
 - Top causes: (1) WebView2 environment creation, about 320 ms, before Tauri `setup` even starts (`run()` at 10 ms, `setup` at 341 ms; no code of ours runs, WebView2 flags tried changed nothing); (2) ready to shown 40-50 ms (two frames + `Window::show`); (3) page boot about 70 ms (parsing the 276 KB CodeMirror chunk, 3 parallel IPC calls).
 - exe: 6,010,368 bytes (5.7 MB) vs 10 MB: OK. Initial JS: 98.9 kB gzipped + 2.5 kB CSS vs 300 KB: OK. Settings, AI controller, diff, api, find are NOT in `dist/index.html` (only index, CodeMirror chunk, appearance).
@@ -392,12 +447,14 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - WebView2 data folder: `%LOCALAPPDATA%\com.example.mynote\EBWebView` (default, local), 125 MB.
 
 ## Decisions (M6)
+
 - Defaulting WebView2 to `--disable-gpu` would meet the visible-window budget (median 398 ms) and save about 100 MB, but changes rendering for everyone: NOT applied, left for the user to decide.
 - `MYNOTE_TIMING=1` also prints `run`, `setup start/done` and a page breakdown, passed inside the existing `editor_ready` call (no extra IPC; ignored without the variable).
 - Session loading: `load_session(full)`; `full=false` returns a single `L` byte for a file over 256 KB (a session always starts with `{`). Frontend: `isSessionLarge`, `lateRestore` in `app.ts` (replaces a blank placeholder, else restored tabs go first; zoom applied unless the user already zoomed).
 - `docs/measure-startup.ps1` is the repeatable startup and memory measurement.
 
 ## M5 results (release, Windows 11 build 26300)
+
 - exe: 6,009,344 bytes (5.7 MB) vs 10 MB: OK (M4 5,974,016: +35 KB; Rust: presets, truncation signal, `num_ctx`, Windows clipboard read).
 - initial JS: 98.6 kB gzipped (`gzip -9`, index + appearance + the shared CodeMirror chunk) + 2.5 kB CSS vs 300 KB: OK (M4 97.2: +1.4 kB for the AI button, Ctrl+I, the right-click menu and the lazy hooks). Lazy, fetched on first use only: AI controller + menu + panel 9.1 kB gz JS + 1.4 kB CSS; the word diff is its own chunk, 0.8 kB gz, fetched when "Changes" or the rollback list needs it. Verified on the real exe: no controller / diff / api chunk is loaded at startup.
 - startup, 5 warm runs, editor ready / shown: 453/497, 406/461, 379/446, 387/442, 400/451 ms. No regression (M4 406-437 ready); the 400 ms budget is still NOT reliably met.
@@ -415,11 +472,12 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - NOT verified: a chat with a real model (OpenAI, Anthropic, Gemini, or the real Ollama: only mock servers; the real Ollama was not sent a chat to avoid loading a model); the right-click Paste on macOS/Linux (it tells the user to press Ctrl+V there) and everything else on those systems; a saved-preset edit/delete through the Settings UI (the preset row in the menu and its run were verified; the Settings form is type-checked and built but not clicked); Regenerate and the Copy button (code paths shared with the verified ones, not clicked); the Anthropic `max_tokens` cap on a model with a smaller limit (a readable provider error would show); whole-file Replace on a very large file.
 
 ## Decisions (M5)
+
 - Structure: pure logic lives in `src/ai/{scope,actions,prompts,output,diff,apply,history,tokens,ready}.ts` (no DOM, imports use `.ts` suffixes so Node can run the tests; `diff.ts` is lazy). UI: `menu.ts` (popup), `controller.ts` (flow + preview/rollback panel); both are one lazy chunk loaded the first time the AI menu opens. Main chunk only has the AI button, Ctrl+I, the context menu (`editor/contextmenu.ts`) and the hooks in `app.ts` (`aiCtl?.onUpdate`, `aiCtl?.onTabChange`). Rollback histories are a `WeakMap<Tab, RollbackHistory>` inside the controller, so `Tab` did not change and a closed tab frees its history. In memory only: not saved with the session.
 - Scope: the MAIN selection range if non-empty (a whitespace-only selection counts), else the whole file; badge "Selection, N words" / "Whole file, N words" (each CJK character counts as a word). Empty text disables every action that needs text; a custom prompt or preset can run on an empty file.
 - Flow: nothing touches the document until Accept. One session at a time; starting another action or Rollback history discards a pending preview. Switching tabs discards the preview and cancels the request (stated in the status bar). Cancel (button, x, Escape) while streaming aborts the request and closes the panel; after the result: Reject / Close. A result is cleaned (`cleanResult`: CRLF to LF, an echoed `<text>` wrapper and a fence around the whole reply removed unless the input had fences); replacing also copies the input's leading/trailing whitespace so a trailing newline is not eaten.
 - Apply modes per action: Summarize = Insert below (blank line before; after the line holding the selection's end, or at the file end), Continue = insert right after the scope (adds one space only when needed), everything else = Replace (selection or file). Each result also offers the sensible second placement. Diff ("Changes" tab) only for rewriting actions (shorten, rewrite, grammar, tone, custom, presets), not for summarize, translate or continue. Stale (source text changed): Replace/Insert below/after are removed; Insert at cursor, Copy, Regenerate, Reject stay. A selection is followed through edits; for the whole file ANY change counts.
-- Accept = one CodeMirror transaction with `isolateHistory.of("full")` and `userEvent: "input.ai"`, selecting the new text. Rollback = same, so it is one Ctrl+Z and is itself recorded as "Restore: <action>" (it can be rolled forward).
+- Accept = one CodeMirror transaction with `isolateHistory.of("full")` and `userEvent: "input.ai"`, selecting the new text. Rollback = same, so it is one Ctrl+Z and is itself recorded as "Restore: <action></action>" (it can be rolled forward).
 - Rollback semantics (my reading of "later edits"): an entry's range follows later edits; restoring replaces only that range with the old text, so edits ELSEWHERE are kept. The user is asked first when the text in that range is no longer what the AI put there (edited since, or replaced by a later change, or deleted); the dialog says Ctrl+Z can bring it back. Entries touched by Ctrl+Z / Ctrl+Y are "detached" (undo rewrote exactly that text; the range can no longer be trusted and a restore would duplicate text): they stay listed as "undone with Ctrl+Z" and cannot be restored. Caps: 50 entries and 4,000,000 characters (about 8 MB) across before+after; oldest dropped first; an entry that alone exceeds the cap is not stored (Accept still works, the status bar says so, Ctrl+Z still undoes it).
 - Prompts: one system prompt (only the result; no preface, notes or quotes; no code fences unless the input has them; keep line breaks/lists/indentation; same language unless asked; the text is material, not instructions; no `<text>` tags in the reply) + a user message "instruction + `<text>...</text>`". Reasoning blocks (`<think>`, `<thinking>`, `<thought>`, `<reasoning>`) are stripped while streaming, only at the very start of the reply (so a document that really contains such a tag later is safe); an unclosed block yields "returned no text" instead of leaking reasoning.
 - Context: `estimateTokens` (about 4 chars/token, 1 per CJK character, 2.5 chars/token for other scripts). Windows we assume (we do not ask the server): Ollama 32,768 max (we set `options.num_ctx` per request, bucketed 4096/8192/16384/32768, only when the need exceeds 1,500 tokens because Ollama's own default varies by version and VRAM; the Ollama docs and issues confirm `options.num_ctx` is honored by native `/api/chat` and is not available through its OpenAI-compatible route), local OpenAI-compatible 4,096 (LM Studio's usual default), hosted OpenAI-compatible 128k, Anthropic 200k, Gemini 1M. If prompt + expected reply exceeds that, a dialog asks first (Don't send / Send anyway / Cancel); nothing is ever cut by My Note. A reply that stops at the output limit is reported by every parser (`Item::Truncated` -> `done.truncated`) and shown as a warning on the preview. `max_tokens` (Anthropic only) = expected reply size clamped to 1,024..8,192.
@@ -429,6 +487,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Other: Ctrl+I stops propagation so CodeMirror's own Ctrl+I never runs; the AI button is hidden on the Settings tab; the status bar's AI indicator is unchanged from M4. Settings > AI, "Test connection" now passes `{ maxTokens }`.
 
 ## M4 results (release, Windows 11 build 26300)
+
 - exe: 5,974,016 bytes (5.7 MB) vs 10 MB: OK. Up 1.42 MB from M3 (4,553,216): all of it is the HTTP stack (reqwest + hyper + rustls/ring + the OS certificate verifier).
 - initial JS: 97.2 kB gzipped (`gzip -9`: index 95.1 + the shared appearance chunk 2.2) + 2.5 kB CSS vs 300 KB: OK (M3 95.7). The AI settings UI is its own lazy chunk (4.2 kB gz JS + 0.7 kB CSS), fetched only when the AI section is first shown.
 - startup, 5 warm runs, editor ready / shown: 422/456, 437/507, 406/467, 433/482, 412/469 ms. Same as M3; the 400 ms budget is still NOT MET. Startup does no AI work: a plain launch writes no `config.json` and makes no connection.
@@ -440,13 +499,14 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - NOT verified: a successful chat against OpenAI, Anthropic or Gemini (no real keys; fixtures + mock servers only); Anthropic/Gemini model lists with a valid key; a chat against the real Ollama; macOS and Linux (`open_ollama_site` and the macOS/Linux Ollama paths are written but never compiled here); the plain-http "Allow anyway" path end to end (only the refusal was driven); proxies (the local client never uses one; the remote client uses whatever reqwest finds, untested); the 180 s read timeout; the Test button on a model that returns no text.
 
 ## Decisions (M4)
+
 - HTTP: `reqwest` 0.13, `default-features = false`, `rustls-no-provider` + a direct `rustls` dep with the `ring` provider (aws-lc-rs needs cmake/nasm and is bigger) + the OS certificate store (rustls-platform-verifier). HTTP/1.1 only; no cookies/gzip/json/stream features; `Response::chunk()` streams. `ureq` was the other candidate; rejected because a blocking read cannot be aborted and Cancel must really close the connection. Two lazily built clients: local (never a proxy, so localhost text cannot go to a proxy) and remote. Redirects are never followed (a redirect could carry the key to an unapproved host). Connect timeout 10 s, list timeout 20 s, 180 s maximum silence between stream chunks (a local model may need time to load).
 - Cancel: `ai_stream` runs the request as a spawned task; `ai_cancel(request_id)` aborts it, which drops the response and so closes the socket (the server stops generating). A cancel that arrives before the stream registers is remembered. Events over a Tauri `Channel`: `chunk`, then exactly one of `done` / `cancelled` / `error`.
 - Where things live: `src-tauri/src/ai/` = `mod.rs` (types, config validation, the gate, commands), `net.rs` (the only code that touches the network), `parse.rs` (pure stream and list parsers), `detect.rs` (Ollama file check), `tests.rs`. Frontend `src/ai/` = `types.ts`, `api.ts` (invoke wrappers, lazy), `settings.ts` + `settings.css` (Settings > AI UI, lazy). The status bar wording is `describeAi` in `editor/statusbar.ts`.
 - Config: an `ai` object inside `config.json` (`enabled`, `active`, `environments[]`). Additive, so `CONFIG_VERSION` stays 1. `Settings.ai` is `#[serde(skip)]`: written only by `to_file_bytes`, loaded only from the file (`AiConfig::from_value`), unreachable through the generic `set_settings` patch (tested), and not sent in the settings payload. The frontend gets `ai: AiStatus` (enabled + active environment: name, model, host, local, consent, ready) inside `Appearance`, derived from settings alone (no keychain, no network), plus a full `AiView` from the `ai_*` commands.
 - Consent gate: `ai::permit()` is the only way to a `Permit`, and every function in `net` needs one. It refuses unless AI is on and the environment's consent is `Granted` for its CURRENT origin (`consentOrigin` must equal scheme://host:port; plain http to a non-local host also needs `allowInsecure`). Changing the base URL to another origin resets consent, models and the selected model. A hand-edited file cannot grant consent for another host: such entries load as unset. The key is read from the keychain only after the check passes. Consent changes are saved immediately (not debounced).
 - Enable AI is one click and one command: it sets `enabled`, and if there is no Ollama environment yet it checks files (PATH + known locations; Windows: `%LOCALAPPDATA%\Programs\Ollama`, Program Files) and adds an Ollama environment with consent unset. It never runs the binary. Not found: the UI says so with an ollama.com link and does nothing else. `open_ollama_site` opens that one fixed URL in the browser (rundll32 / open / xdg-open), only when clicked; a plain `<a>` would navigate the app's own webview away.
-- Consent UI: a local Ollama gets the exact question with Allow / Don't allow. Every other environment gets "Allow connections to <host>?" with the host in bold, "this computer" or "another machine", a plain statement that selected text (or the whole file) will be sent there when an AI action runs, an optional/required key field and "Allow and load models" / "Don't allow". Allowing loads the models at once; a failure is shown but the permission stays. Plain http to a non-local host shows a warning in the block and a dialog (Don't allow / Allow anyway / Cancel); nothing is saved if refused. Local = localhost, *.localhost, 127.0.0.0/8, ::1 only; a LAN address is "Remote".
+- Consent UI: a local Ollama gets the exact question with Allow / Don't allow. Every other environment gets "Allow connections to <host></host>?" with the host in bold, "this computer" or "another machine", a plain statement that selected text (or the whole file) will be sent there when an AI action runs, an optional/required key field and "Allow and load models" / "Don't allow". Allowing loads the models at once; a failure is shown but the permission stays. Plain http to a non-local host shows a warning in the block and a dialog (Don't allow / Allow anyway / Cancel); nothing is saved if refused. Local = localhost, *.localhost, 127.0.0.0/8, ::1 only; a LAN address is "Remote".
 - Keys: keychain id `ai.<environment id>` (service `my-note`). `hasKey` is a flag in config.json so opening Settings never touches the keychain; if the entry vanished, the next request says so. Keys go in headers (Bearer, `x-api-key`, `x-goog-api-key`), never in URLs. Removing an environment deletes its key first; if the keychain refuses, the environment stays.
 - Models: only what the environment returns (Ollama `/api/tags`; OpenAI-compatible and Anthropic `data[].id`; Gemini models that support `generateContent`). The list and its time are cached in config.json, so reopening Settings (even after a restart) shows them with no request; Refresh refetches. A selected model must be in the list. If exactly one model is returned and none is selected, it is selected.
 - Wire details: Gemini uses `streamGenerateContent?alt=sse` and ends with the connection; for the other three, a stream that ends without its terminator is an error ("closed the connection before the reply was complete"). Anthropic `max_tokens` defaults to 4096 (`maxTokens` can be passed). Thinking text is skipped. Errors (401/403/404/408/429/5xx/transport/certificate) have readable wording plus the provider's own message when there is one (HTML bodies dropped).
@@ -455,6 +515,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - New dependencies: `reqwest` (+ hyper, rustls, tokio-rustls, platform verifier) and `rustls` 0.23 with ring: +1.4 MB in the exe. Nothing new on the frontend.
 
 ## M3 results (release, Windows 11 build 26300)
+
 - exe: 4,553,216 bytes (4.3 MB) vs 10 MB: OK. Up 1.0 MB from M2 (3.3 MB); almost all of it is `keyring` 4.2 (its Windows store pulls in `regex`). Options if that ever matters: call Credential Manager through windows-sys directly (~100 lines, no regex).
 - initial JS: 95.7 KB gzipped (296.3 KB raw) + 7.3 KB CSS vs 300 KB: OK (M2: 95.6 KB; the panel adds nothing). Settings is a lazy chunk: 1.9 KB gz JS + 1.8 KB CSS.
 - startup, 4 warm runs, editor ready / shown: 409/466, 406/460, 434/488, 396/458 ms. Slightly better than M2 (436-471 ready); the 400 ms budget is still NOT MET (2 of 4 runs within 10 ms of it). Config load is one small file read.
@@ -463,6 +524,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - NOT verified (the keychain commands were checked against the real Credential Manager in M4): backup of an invalid file on a real launch (unit tested); the exit flush; Ctrl+, on macOS (Cmd+,); default encoding / line ending applied to a new tab then saved; restore-session off across a restart; narrow-window layout.
 
 ## Decisions (M3)
+
 - Settings = one flat camelCase struct in `config.rs`; `config.json` (version 1) in the app CONFIG dir (same folder as the data dir on Windows/macOS, `~/.config` on Linux). Session stays in the data dir. Unversioned `settings.json` from M2 is read once as version 0, saved as `config.json`, then deleted. `migrate()` is the single place for future steps.
 - Invalid file (not JSON, not an object, bad version, newer version, not UTF-8) is moved to `config.json.invalid-<unix time>` and defaults load; the backup is never overwritten. Per-field problems in an otherwise valid file just fall back for that field. Unreadable for another reason (permissions): defaults, file left alone.
 - Saves: changes apply in memory at once; a delayed thread writes after 400 ms of quiet (newest change wins), and `exit_app` flushes anything pending. Atomic write is temp file + rename. A hard kill within 400 ms loses that last tweak.
@@ -475,6 +537,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Removed: `src/theme/viewmenu.ts`, the `#viewmenu` button, `.menu .hd/.note/hr` CSS.
 
 ## M0 results (release, Windows)
+
 - exe: 3,257,344 bytes (3.1 MB) vs 10 MB budget: OK
 - initial JS: 89.3 KB gzipped (274.5 KB raw) + 0.15 KB CSS vs 300 KB budget: OK
 - startup, process start to editor ready / window shown (MYNOTE_TIMING=1):
@@ -482,6 +545,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
   - Budget is 400 ms to a usable editor: NOT MET yet (about 510 ms to shown, 424-552 to ready). Mostly WebView2 init. To investigate in a later milestone.
 
 ## M1 results (release, Windows)
+
 - exe: 3,486,208 bytes (3.3 MB; +0.2 MB for dialog plugin/serde) vs 10 MB: OK
 - initial JS: 96.3 KB gzipped (293.8 KB raw) + 1.4 KB CSS; Find/Replace is a lazy chunk (6.6 KB gz) vs 300 KB: OK
 - startup (3 clean runs, editor ready / shown): 462/536, 565/631, 509/569 ms. 400 ms budget still NOT MET (M0: 424-552 ready). Session load adds little; WebView2 init still dominates.
@@ -489,6 +553,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Verified by driving the release exe over the WebView2 debug port: file open from args (UTF-16 LE, Windows-1252, UTF-8/LF detected per file), tab switching, dirty marker, Ctrl+H replace-all, Ctrl+G dialog, no console errors. NOT verified by hand: native open/save dialogs, drag-drop of files, tab drag reorder, middle-click, Ctrl+Tab (WebView2 may swallow it; Ctrl+PageUp/PageDown also work), print, close prompts, real session restore after restart.
 
 ## M2 results (release, Windows 11 build 26300)
+
 - exe: 3,507,712 bytes (3.3 MB; +21 KB for window-vibrancy and registry/high-contrast reads) vs 10 MB: OK
 - initial JS: 95.6 KB gzipped (296.6 KB raw, `gzip -9`) + 2.3 KB CSS; Find stays lazy (6.7 KB gz) vs 300 KB: OK
 - startup, 4 warm runs, editor ready / shown: 436/499, 459/512, 436/492, 471/542 ms. No regression vs M1 (462-565 ready), but the 400 ms budget is still NOT MET. One cold first run after the build took 915/971 ms (new exe, first WebView2 start).
@@ -496,6 +561,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - NOT verified by running: Windows 10, Windows 11 build 22000-22620 (Mica path), macOS, Linux (macOS and Linux code is written but never compiled here). Not run-tested either: the `--no-effects` flag, the Reduce effects switch, OS "Transparency effects" off and high-contrast fallbacks, and the on-focus re-check. Their decision logic is unit tested (`effects::decide`, 6 tests; settings parsing, 4 tests) and wired in `effects::apply`. A last screenshot pass with typed text over Transparent/Blur in both themes did not run (the app exited before capture), so text legibility over a busy backdrop at 50% was only looked at in the Transparent shot.
 
 ## Decisions (M2)
+
 - Rust owns settings: `settings.json` in the app data dir (theme, effects, opacity 0.5-1.0, reduceEffects), written atomically, parsed per field so a bad file falls back to defaults. First launch: system theme, effects Off, opacity 0.85 (used only once effects are on). Commands `get_appearance` / `set_appearance` (sync, so they run on the main thread as macOS needs) return settings plus the real effect status (requested, active, backend, reason, support flags).
 - Windows Blur backend, per the window-vibrancy docs: build >= 22621 Acrylic (system backdrop API); 22000-22620 Mica (Acrylic lags on 22000); Windows 10 Blur unsupported -> solid (Acrylic/blur lag on 1903+), Transparent still offered. The legacy `apply_blur` is never used (lags on 22621+). macOS: vibrancy (WindowBackground material). Linux: translucency only if GDK reports a compositor; no Blur.
 - Fallback to solid with a recorded reason (`Status.reason`, shown in the View menu, printed with MYNOTE_TIMING=1): `--no-effects`, Reduce effects, high contrast, OS transparency effects off (Windows registry `EnableTransparency`), no compositor, blur unsupported, or an apply call returning an error. OS state is re-checked on window focus and theme change, and the frontend gets an `appearance-changed` event if the outcome changed.
@@ -508,6 +574,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Tauri app data dir ignores the APPDATA env var on Windows, so test runs wrote to the real `%APPDATA%\com.example.mynote`. The test `settings.json` was deleted afterwards; `session.json` there holds an empty Untitled tab.
 
 ## Decisions
+
 - Editor text is always `\n` in memory; encoding and line ending are per-tab metadata re-applied on save. Mixed line endings are normalized to the majority on save. New files default to UTF-8 + CRLF.
 - Status-bar encoding / line-ending choice changes how the file is SAVED (marks tab dirty); it does not reload/reinterpret the file.
 - File IPC uses raw byte bodies `[u32 BE meta len][meta JSON][payload]` (no JSON-escaping of 20 MB strings). Read/write/detect/dialog commands live in Rust `files`; session file in `config`.
@@ -521,6 +588,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - View menu items are shortcuts and clickable status-bar items: Alt+Z / "Wrap" toggles wrap, "100%" resets zoom.
 
 ## Decisions (M0)
+
 - Scaffold via create-tauri-app (vanilla-ts), then renamed; bundle disabled (`--no-bundle` builds the exe only); icons are the scaffold defaults.
 - Removed the opener plugin and `withGlobalTauri`; frontend uses `@tauri-apps/api` invoke only.
 - Capability file has an empty permission list: app commands `editor_ready` and `show_window` need none.
@@ -531,12 +599,13 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - Window is shown after two animation frames following editor creation.
 
 ## Next
+
 - Decide on `--disable-gpu` by default (see Decisions M6); other levers for the startup budget: show the window sooner than two frames, split or trim the CodeMirror chunk.
 - M6 done. Open items from M5: click-test the saved-preset form in Settings, Regenerate and Copy; a real chat against each provider; a model-context lookup for Ollama (`/api/show`) instead of the fixed 32k cap; consider saving rollback history with the session.
 - Open: re-run the text-legibility screenshots in both themes at 50%; test `--no-effects` and Reduce effects at runtime; try Windows 10 / 11 21H2 / macOS / Linux if available.
 
-
 ## M7 GitHub builds and releases
+
 - `.github/workflows/ci.yml` (PRs, pushes to main/master): `npm ci`, `tsc`, `npm test`, `vite build`; Rust on Windows and Ubuntu 22.04: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`. No release.
 - `.github/workflows/release.yml` (tags `v*`, manual dispatch): `prepare` (tag), `draft` (creates ONE draft release so matrix jobs don't race), `build` matrix (Windows x64, macOS aarch64 + x86_64, Ubuntu 22.04) via `tauri-apps/tauri-action@v0`, then `checksums` (SHA256SUMS of every release file).
 - Portable: `My-Note_<ver>_windows-x64-portable.zip` (the plain exe zipped), attached by the Windows build job.
@@ -550,13 +619,14 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - (Original note) Before that, the workflows had never run on GitHub. Local checks pass: tsc, npm test, vite build, cargo fmt, clippy `-D warnings`, cargo test (86 tests).
 
 ## How to release
+
 1. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` to match, commit.
 2. `git tag v0.1.0` and `git push origin v0.1.0`. (Or run the Release workflow by hand from the Actions tab; it tags the commit with `v<version>`.)
 3. Wait for the Release workflow. It creates a draft release with the installers, the portable zip and SHA256SUMS.
 4. Check the files on the draft (names, sizes, a test install), then publish it on GitHub.
 
-
 ## M9 README, license, contributing
+
 - Done: `README.md` (features, download and install from GitHub Releases, privacy, build from source, keyboard shortcuts from `src/app.ts`, unsigned-build SmartScreen note, screenshot placeholder), `LICENSE` (MIT, `[YOUR NAME]` placeholder, 2026), `CONTRIBUTING.md` (setup, test commands, rules from CLAUDE.md, budgets).
 - Decisions: only facts checked against the code. Ctrl+Tab left out (M1 notes say WebView2 may swallow it); Ctrl+PageUp/PageDown listed instead. Linux/macOS keychain wording kept generic.
 - Owner follow-ups done: LICENSE holder set to Rafat Abdullah Pantho (MIT); two screenshots (dark, light) in `docs/screenshots/`, taken from the release exe over the WebView2 debug port and linked in the README; README links and clone URL point to https://github.com/Rafat-Pantho/my-note; remote `origin` added. Nothing pushed (by request).

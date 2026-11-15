@@ -1,6 +1,6 @@
 [package]
 name = "my-note"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fast, modern notepad"
 edition = "2024"
 
