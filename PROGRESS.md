@@ -184,5 +184,3 @@
 3. Wait for the Release workflow. It creates a draft release with the installers, the portable zip and SHA256SUMS.
 4. Check the files on the draft (names, sizes, a test install), then publish it on GitHub.
 
-## Next
-- M8 (per the plan).
