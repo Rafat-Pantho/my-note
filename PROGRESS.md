@@ -17,6 +17,33 @@
 - [x] A4 Markdown mode (see the A4 section)
 - [x] A5 File associations and polish (see the A5 section)
 
+## Notepad gap audit (M10, no code changed; found by searching the code)
+
+| # | Item | Status | Where |
+|---|------|--------|-------|
+| 1 | Menu bar (File, Edit, View) with shortcut labels | Done | `src/editor/menubar.ts`, commands in `src/app.ts` (`loadMenus`) |
+| 2 | F3 / Shift+F3, also with the find panel closed | Done | `src/app.ts` key handler (`findStep`) |
+| 3 | Save all (Ctrl+Alt+S) | Partial | File > Save all exists (`menubar.ts`, `saveAll` in `app.ts`); no shortcut: the key handler returns early when Alt is held (`app.ts` ~965); A1 left it out on purpose (AltGr clash) |
+| 4 | Recent files (menu, off switch, clear) | Partial | Menu, 20 entries, Clear list: done (`menubar.ts`, Rust `recent_*`). No off switch found in settings |
+| 5 | Status bar show/hide toggle | Done | View > Status bar (`menubar.ts`); AI indicator stays by design |
+| 6 | Total character count in status bar | Missing | `src/editor/statusbar.ts` shows Ln/Col, selected count, zoom, wrap, encoding, line ending only |
+| 7 | Tab right-click menu | Done | `showTabMenu` in `app.ts` (close, others, right, copy path, show in file manager, move to new window) |
+| 8 | New window, close window, open in tab or window setting | Done | Ctrl+Shift+N (`app.ts`), File > New window / Close window, Settings > General "Open files in a new window" |
+| 9 | .LOG first-line timestamp | Missing | No code for it (`.log` only appears in the spell-check file-type list) |
+| 10 | Changed-on-disk detection | Done | `src/tabs/external.ts`, Rust `file_stamps`, `handleExternal` in `app.ts` |
+| 11 | Read-only file handling | Missing | No read-only attribute check in Rust (`files`) and no read-only state in the editor or save path |
+| 12 | Spell check and autocorrect, per file type | Done | `src/editor/spell.ts`, `spelltypes.ts`, `autocorrect.ts`, Rust `spell.rs`, Settings > Spelling |
+| 13 | Page setup (paper size, orientation, margins, header, footer) | Partial | Orientation, margins, header, footer done (`src/editor/printcss.ts`, lazy dialog). No paper size choice (the print dialog / printer decides) |
+| 14 | Ctrl+Shift+Tab previous tab | Done | `case "tab"` with Shift in `app.ts` (~988); also Ctrl+PageUp/PageDown |
+
+### Smallest design for each gap
+- 3 Save all shortcut: also accept Ctrl+Alt+S only when the key is the physical `KeyS` and AltGr is not active (`!e.getModifierState("AltGraph")`); one branch in the key handler, no new code or chunk.
+- 4 Recent off switch: one boolean `recentEnabled` in config (default on); when off, `recent_add` does nothing, the menu hides the submenu and "Clear list" stays. One Rust check, one Settings row.
+- 6 Character count: add `doc.length` to the status bar as "N chars", updated in the existing update-listener (no scan; CodeMirror keeps the length), shown only when the bar is visible; hide the field when narrow.
+- 9 .LOG timestamp: on open, if the file name ends in `.log` (case-insensitive) and the first line is exactly `.LOG`, append a newline and the date/time (reuse `insertDateTime`) at the end once, as one undoable change; frontend-only, about 15 lines, no dependency.
+- 11 Read-only: in Rust `read_file` return `readOnly` from `metadata().permissions().readonly()`; the frontend sets `EditorState.readOnly` for that tab, shows "Read-only" in the status bar and the tab tooltip, and Save becomes Save as (a File menu item "Make writable" is not needed). Re-check at save time and on the focus stat that already exists.
+- 13 Paper size: add a `paperSize` select (A4, Letter, Legal, A3) to the existing Page setup dialog and emit `size: A4 landscape` in the same `@page` rule; about 10 lines, lazy chunk only.
+
 ## A5 File associations and polish
 Checks: `tsc` clean, `npm test` 202 pass, `cargo fmt` applied, `cargo clippy --all-targets -D warnings` clean, `cargo test` 119 pass (unchanged: no pure logic was added; the path helper is covered by the existing command-line flag tests only through the same code path). Release exe 6,966,272 bytes (6.6 MB, budget 10 MB; +4,096 bytes vs A4). Initial JS 106.2 kB gzipped (level 9, by 1000; A4 106.0; budget 300 KB). The `listen("open-paths")` line is the only frontend addition.
 
