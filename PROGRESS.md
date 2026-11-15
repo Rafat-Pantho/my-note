@@ -20,6 +20,36 @@
 - [x] M11 App shell gaps (see the M11 section)
 - [x] M12 Windows and file behavior (see the M12 section)
 
+## M13 Spell check and autocorrect: feasibility note (stopped here, see "Needs a decision")
+Written at the start of M13, no code changed. Most of M13 already exists from A3 (see the A3 section); this note checks the brief against it.
+
+### Native webview spell check
+- How to switch it on: set `spellcheck="true"` and `lang="en"` (or the user's language) on the `.cm-content` element (CodeMirror: `EditorView.contentAttributes.of({ spellcheck: "true", lang })`, in a compartment so it can follow the tab). Tested in A3 on the release exe: it works.
+- WebView2 (Windows, tested A3): uses the Windows spell checker with the languages installed in Windows. Under our launch args (`--host-resolver-rules="MAP * ~NOTFOUND"`, no outside network): squiggles still appear, so it needs no network and the args stay as they are. Cost +13 MB in the WebView2 process tree, no binary cost. Limits: our right-click menu replaces the webview menu, and there is no API to read suggestions, "Add to dictionary" or "Ignore"; so suggestions cannot be shown in our menu. It marks URLs and identifiers, and the language list is whatever Windows has.
+- WKWebView (macOS): built in (uses the system checker, NSSpellChecker; may call the system's own services but not our code). NOT tested here. Same limit: no suggestion API for a custom menu.
+- WebKitGTK (Linux): needs the Enchant / Hunspell dictionaries installed on the machine, and WebKitGTK spell checking must be enabled by the app (`webkit_web_context_set_spell_checking_enabled`; Tauri does not expose it, so it would need extra Rust and the `webkit2gtk` crate API). NOT tested here. Same suggestion limit.
+- Online service: none found on Windows (offline Windows checker; verified no outside connection with the launch args). I cannot verify what macOS does (system-level, not ours).
+
+### What we ship instead (A3, already in the code)
+Embedded Hunspell: crate `spellbook` 0.4.2 (MPL-2.0) + the en_US dictionary inside the exe. Cost already reported in A3: exe +838,656 bytes (about 555 KB of it is the dictionary), initial JS +1.4 kB gz, spell chunk 4.8 kB gz lazy, memory +2.3 MB while loaded. It gives suggestions, Add to dictionary and Ignore in our own menu, works the same on every OS, and never touches the network. This is the "dictionary" the brief says to ask about first: it was added in A3, before this brief, with the numbers recorded there.
+
+### Brief vs current code
+| Brief | Now |
+|---|---|
+| Spell check toggle, default on | Done (Settings > Spelling) |
+| Per-extension list editor; defaults `.txt` and no extension; off for .log .json .js .ts .rs .toml .yaml .cfg .bat .sh | Partial: per file TYPE switches (Untitled, Plain text, Markdown on by default; Web, Data and config (includes .log), Source code, Other off), not an editable extension list. Markdown is on by default (the brief does not mention it) |
+| Suggestions in our menu | Done, through the embedded checker |
+| Autocorrect: small built-in table, word boundary, one Ctrl+Z, never in code, never on paste or AI text | Done: about 130 entries (the brief said a few dozen), Space or Enter, own undo step, skipped in code types, URLs, paths, identifiers, Markdown code; paste and AI text are not typed input, so they never trigger it |
+| Settings say it is a small built-in list | Not stated in the Settings text (to check / add) |
+| No text leaves the machine | True (checker is in-process; the settings panel does not say so) |
+| Settings under General, lazy | It is its own Settings > Spelling section, in the lazy Settings chunk |
+| Tests | Extension / type matching (`spelltypes.test.ts`), autocorrect (`autocorrect.test.ts`, boundaries, case, skipped contexts) and spell tokenizer exist; the Ctrl+Z step is checked on the real exe, not in a unit test |
+
+### Needs a decision (I stopped; M13 is NOT ticked)
+1. Is the embedded checker (already in the exe) acceptable? If you want native-only (no dictionary, no spellbook, about 0.8 MB smaller), suggestions, Add to dictionary and Ignore go away, because Windows exposes no suggestion API to our menu.
+2. Do you want the per-type switches replaced by (or extended with) an editable extension list with the brief's defaults? It is a small change: a `spellExtensions` string list in `config.json`, the list editor in Settings, and `fileTypeOf` replaced by an extension lookup. It would change today's defaults (Markdown off, `.log` stays off).
+3. Small wording fix: say in Settings that autocorrect is a small built-in list and that nothing leaves the machine.
+
 ## M12 Windows and file behavior
 Scope: the audit's Missing / Partial items (.LOG, read-only) plus two gaps found while checking items 1-2. New window, "Opening files" setting, single instance and changed-on-disk handling were already Done (A1, A2, A5) and were not rewritten. Item 4 differs from the brief on purpose: a clean tab shows the existing Reload / Dismiss bar (not a silent reload), because A2 chose a non-blocking bar so a reload never replaces text under the user's hands. Dirty and deleted files already behave as asked (dialog Reload / Keep mine; deleted: bar, text kept).
 Checks: `tsc` clean, `npm test` 208 pass (+4), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 121 pass (+1). Release exe 6,970,880 bytes (6.6 MB; +4,096 vs M11). Initial JS 14,297 + 796 + 91,469 = 106.6 kB gzipped by 1000 (M11 106.1; budget 300 KB). Startup, 7 runs, editor ready / shown medians 473 / 478 ms (range 455-497 / 462-518); M11's single run was 461 / 465. The 400 ms budget is still NOT met; our own part is unchanged (the new code only runs when a file opens or saves).
