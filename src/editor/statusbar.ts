@@ -21,6 +21,8 @@ export interface StatusInfo {
   line: number;
   col: number;
   selected: number;
+  /** Total characters in the document (UTF-16 code units, from the document length). */
+  chars: number;
   zoom: number;
   wrap: boolean;
   encoding: string;
@@ -62,6 +64,7 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
   const sp = mk("span");
   sp.className = "sp";
   const pos = mk("span");
+  const chars = mk("span", "Characters in the document");
   const sel = mk("span");
   const zoom = mk("button", "Reset zoom (Ctrl+0)");
   const wrap = mk("button", "Toggle word wrap (Alt+Z)");
@@ -72,7 +75,7 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
   const aiText = mk("span");
   const aiBadge = mk("span");
   ai.append(aiText, aiBadge);
-  host.append(ai, msg, sp, pos, sel, zoom, wrap, enc, eol);
+  host.append(ai, msg, sp, pos, chars, sel, zoom, wrap, enc, eol);
 
   ai.onclick = h.openAi;
   zoom.onclick = h.resetZoom;
@@ -101,6 +104,7 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
         pos.dataset.c = String(s.col ?? pos.dataset.c);
         pos.textContent = `Ln ${pos.dataset.l}, Col ${pos.dataset.c}`;
       }
+      if (s.chars !== undefined) chars.textContent = `${s.chars.toLocaleString()} chars`;
       if (s.selected !== undefined) sel.textContent = s.selected > 0 ? `${s.selected} selected` : "";
       if (s.zoom !== undefined) zoom.textContent = `${s.zoom}%`;
       if (s.wrap !== undefined) wrap.textContent = s.wrap ? "Wrap: on" : "Wrap: off";

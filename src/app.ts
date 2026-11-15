@@ -16,6 +16,7 @@ import {
   takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
 import { ClosedTabs, closedEntry } from "./tabs/closed";
+import { saveAllOrder } from "./tabs/saveall";
 import { compare, message, promptFor } from "./tabs/external";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
 import type { SettingsPanel } from "./settings/panel";
@@ -126,7 +127,7 @@ function refreshCursor() {
   const line = s.doc.lineAt(head);
   let selected = 0;
   for (const r of s.selection.ranges) selected += r.to - r.from;
-  status.set({ line: line.number, col: head - line.from + 1, selected });
+  status.set({ line: line.number, col: head - line.from + 1, selected, chars: s.doc.length });
 }
 
 function refreshAll() {
@@ -403,8 +404,8 @@ async function openDialog() {
 }
 
 async function saveAll() {
-  for (const t of tabs.filter((x) => x.dirty && x.kind !== "settings")) {
-    if (!(await saveTab(t, false))) return; // cancelled or failed: stop here
+  for (const t of saveAllOrder(tabs)) {
+    if (!(await saveTab(t, false))) return; // cancelled or failed: stop here (saveTab reports it)
   }
 }
 
@@ -962,6 +963,7 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === "F5" && !ctrl) return inDoc ? run(insertDateTime) : undefined;
   if (e.key === "F3" && !ctrl && !e.altKey) return inDoc ? run(() => void findStep(e.shiftKey ? -1 : 1)) : undefined;
   if (e.altKey && !ctrl && key === "z") return inDoc ? run(toggleWrap) : undefined;
+  if (ctrl && e.altKey && key === "s" && !e.getModifierState("AltGraph")) return inDoc ? run(() => void saveAll()) : undefined;
   if (!ctrl || e.altKey) return;
   // Editing shortcuts do nothing on the Settings tab (and must not reach the webview's own handlers).
   if (!inDoc && ["s", "f", "h", "g", "p", "i", "e", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});

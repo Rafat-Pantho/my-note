@@ -16,6 +16,21 @@
 - [x] A3 Spell check and autocorrect (see the A3 section)
 - [x] A4 Markdown mode (see the A4 section)
 - [x] A5 File associations and polish (see the A5 section)
+- [x] M10 Notepad gap audit (see the audit table)
+- [x] M11 App shell gaps (see the M11 section)
+
+## M11 App shell gaps
+Scope: only the audit's Partial / Missing items. Items 1 (menu bar), 2 (F3), 6 (tab menu), 7 (Ctrl+Shift+Tab) and the Status bar toggle were already Done and were not touched; New window and Page setup were already enabled, so they were not disabled.
+Checks: `tsc` clean, `npm test` 204 pass (+2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 120 pass (+1). Release exe 6,966,784 bytes (6.6 MB; +512 bytes vs A5). Initial JS (index + core + dist) 13,836 + 796 + 91,469 = 106.1 kB gzipped by 1000 (A5 106.2; budget 300 KB). Startup: only 1 of 7 scripted runs captured timing (the others did not start cleanly: WebView2 profile still locked by the killed process): editor ready 461 ms, shown 465 ms. Same range as A5 (458 / 483); the 400 ms budget is still NOT met.
+
+### Done
+- Save all shortcut Ctrl+Alt+S (label in File menu). Ignored when AltGr is active (`getModifierState("AltGraph")`), so layouts that type characters with AltGr are not affected. Order (`src/tabs/saveall.ts`, tested): dirty file tabs in tab order, then untitled tabs one at a time through Save As; stops at the first cancel or failure (`saveTab` reports it).
+- Recent files: cap 20 -> 10; new setting `recentEnabled` (default on, Settings > General "Remember recent files"). Turning it off clears the list, stops recording and the menu shows nothing. Missing files are still skipped when the menu opens. Tests: cap, order, dedupe (existing), off switch (new).
+- Status bar: total characters ("N chars") from `doc.length`, no string built.
+
+### Decisions
+- Recent entries beyond 10 in an old `config.json` are dropped on load (`parse_recent` caps).
+- Character count is UTF-16 code units (CodeMirror length): an emoji counts as 2.
 
 ## Notepad gap audit (M10, no code changed; found by searching the code)
 

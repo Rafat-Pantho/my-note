@@ -100,7 +100,7 @@ export function menuDefs(c: Commands): MenuDef[] {
         SEP,
         { label: "&Save", hint: "Ctrl+S", disabled: !doc(), run: c.save },
         { label: "Save &as...", hint: "Ctrl+Shift+S", disabled: !doc(), run: c.saveAs },
-        { label: "Save a&ll", run: c.saveAll },
+        { label: "Save a&ll", hint: "Ctrl+Alt+S", run: c.saveAll },
         SEP,
         { label: "&Print...", hint: "Ctrl+P", disabled: !doc(), run: c.print },
         { label: "Page set&up...", run: c.pageSetup },

@@ -158,6 +158,8 @@ pub struct Settings {
     pub print_footer: String,
     /// Open files from File > Open and Recent in a new window instead of a new tab.
     pub open_in_new_window: bool,
+    /// Keep a list of recent files. Turning it off also clears the list.
+    pub recent_enabled: bool,
     /// Web search engine for Ctrl+E: "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL
     /// template containing `%s`.
     pub search_engine: String,
@@ -208,6 +210,7 @@ impl Default for Settings {
             print_header: "&f".into(),
             print_footer: "Page &p".into(),
             open_in_new_window: false,
+            recent_enabled: true,
             search_engine: String::new(),
             status_bar: true,
             spell_check: true,
@@ -338,6 +341,12 @@ impl Settings {
         }
         if let Some(b) = get("openInNewWindow").and_then(|x| x.as_bool()) {
             self.open_in_new_window = b;
+        }
+        if let Some(b) = get("recentEnabled").and_then(|x| x.as_bool()) {
+            self.recent_enabled = b;
+            if !b {
+                self.recent_files.clear();
+            }
         }
         if let Some(e) = get("searchEngine")
             .and_then(|x| x.as_str())
@@ -485,7 +494,7 @@ pub fn load_from(path: &Path, legacy: Option<&Path>) -> (Settings, Loaded) {
 
 /* ---------- recent files ---------- */
 
-pub const MAX_RECENT: usize = 20;
+pub const MAX_RECENT: usize = 10;
 const MAX_PATH_LEN: usize = 4096;
 
 fn same_path(a: &str, b: &str) -> bool {
@@ -533,13 +542,21 @@ pub fn existing_recent(list: &[String], exists: impl Fn(&str) -> bool) -> Vec<St
 /// drive does not wipe the list).
 #[tauri::command]
 pub async fn recent_list(settings: State<'_, SettingsState>) -> Result<Vec<String>, String> {
-    let list = settings.get().recent_files;
+    let s = settings.get();
+    if !s.recent_enabled {
+        return Ok(Vec::new());
+    }
+    let list = s.recent_files;
     Ok(existing_recent(&list, |p| Path::new(p).is_file()))
 }
 
 #[tauri::command]
 pub fn recent_add(app: AppHandle, path: String, settings: State<SettingsState>) {
-    settings.with_mut(|s| push_recent(&mut s.recent_files, &path));
+    settings.with_mut(|s| {
+        if s.recent_enabled {
+            push_recent(&mut s.recent_files, &path);
+        }
+    });
     schedule_save(&app);
 }
 
@@ -1065,14 +1082,24 @@ mod tests {
     }
 
     #[test]
-    fn recent_list_keeps_twenty_and_drops_the_oldest() {
+    fn recent_list_keeps_ten_and_drops_the_oldest() {
         let mut l = Vec::new();
         for i in 0..25 {
             push_recent(&mut l, &format!("/f{i}.txt"));
         }
         assert_eq!(l.len(), MAX_RECENT);
         assert_eq!(l[0], "/f24.txt");
-        assert_eq!(l[MAX_RECENT - 1], "/f5.txt");
+        assert_eq!(l[MAX_RECENT - 1], "/f15.txt");
+    }
+
+    #[test]
+    fn recent_off_switch_clears_the_list_and_stops_recording() {
+        let st = SettingsState::new(Settings::default());
+        st.with_mut(|s| push_recent(&mut s.recent_files, "/a.txt"));
+        let s = st.update(&serde_json::json!({ "recentEnabled": false }));
+        assert!(!s.recent_enabled && s.recent_files.is_empty());
+        let s = st.update(&serde_json::json!({ "recentEnabled": true }));
+        assert!(s.recent_enabled);
     }
 
     #[test]
