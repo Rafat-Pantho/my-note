@@ -14,10 +14,15 @@ export const SYSTEM_PROMPT = [
   "- Do not include the <text> tags in your reply.",
 ].join("\n");
 
-export function buildMessages(run: ActionRun, text: string): ChatMessage[] {
+/** Added when the document is a Markdown file: the result goes straight back into the source, so the syntax
+ *  has to survive. */
+export const MARKDOWN_RULE =
+  "- The text is Markdown source. Keep all Markdown syntax valid and unchanged unless the instruction is about it: heading # marks, list markers and numbering, > quotes, [links](urls) and ![images](urls), **bold**, *italic*, ~~strikethrough~~, `code`, fenced code blocks, and pipe tables (keep every | and the |---| separator row). Do not add HTML.";
+
+export function buildMessages(run: ActionRun, text: string, opts: { markdown?: boolean } = {}): ChatMessage[] {
   const body = text.length ? `<text>\n${text}\n</text>` : "(The document is empty.)";
   return [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: opts.markdown ? `${SYSTEM_PROMPT}\n${MARKDOWN_RULE}` : SYSTEM_PROMPT },
     { role: "user", content: `${run.instruction}\n\n${body}` },
   ];
 }

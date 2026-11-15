@@ -78,8 +78,10 @@ html.fx #tint { display: block; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 #app { display: flex; flex-direction: column; height: 100%; }
 #editor, #settings { flex: 1; min-height: 0; position: relative; user-select: text; background: var(--s-bg); }
+#work { flex: 1; min-height: 0; display: flex; }
+#work > #editor { flex: 1 1 0; min-width: 0; }
 #settings { overflow: auto; }
-#app.on-settings #editor { display: none; }
+#app.on-settings #work, #app.on-settings #mdbar { display: none; }
 /* On the Settings tab the status bar keeps only the AI indicator: it must always be visible. */
 #app.on-settings #statusbar > :not(.ai):not(.sp) { display: none; }
 /* View > Status bar off: same rule (the AI indicator is never hidden); transient messages still show. */

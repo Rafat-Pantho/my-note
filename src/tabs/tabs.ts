@@ -20,6 +20,12 @@ export interface Tab {
   extStamp?: Stamp;
   /** Right-to-left reading order for this tab (not saved with the session). */
   rtl?: boolean;
+  /** Markdown mode is on for this tab (kept in step by the app; the AI prompt reads it). */
+  md?: boolean;
+  /** The user's own choice (Markdown mode toggle); undefined = follow the file name (.md, .markdown). */
+  mdManual?: boolean;
+  /** Which Markdown view this tab shows (default source). Not saved with the session. */
+  mdView?: "source" | "preview" | "split";
   /** Untitled tab whose changes were thrown away at app close; not restored. */
   discarded?: boolean;
 }

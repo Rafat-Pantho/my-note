@@ -371,6 +371,11 @@ pub fn open_url(url: &str) -> Result<(), String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("Only http and https addresses can be opened.".into());
     }
+    spawn_open(url)
+}
+
+/// Hands an address to the system (browser or mail program). The caller has already checked the scheme.
+pub fn spawn_open(url: &str) -> Result<(), String> {
     #[cfg(windows)]
     let mut cmd = {
         let mut c = std::process::Command::new("rundll32");

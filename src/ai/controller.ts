@@ -244,7 +244,7 @@ export function createController(host: AiHost): AiController {
       return;
     }
 
-    const messages = buildMessages(run, scope.text);
+    const messages = buildMessages(run, scope.text, { markdown: !!tab.md });
     const reply = expectedOutputTokens(run.def, estimateTokens(scope.text));
     const check = checkContext(env.kind, env.local, promptTokens(messages) + reply);
     if (check.exceeds) {

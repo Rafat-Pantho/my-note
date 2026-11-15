@@ -7,11 +7,12 @@
  *  fixed when Space or Enter is typed, as its own undo step, so one Ctrl+Z brings the typo back.
  *  Pure parts: tokenize.ts, autocorrect.ts. */
 import { invoke } from "@tauri-apps/api/core";
-import { insertNewlineAndIndent, isolateHistory } from "@codemirror/commands";
+import { isolateHistory } from "@codemirror/commands";
 import { type Extension, Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, keymap } from "@codemirror/view";
 import { correctionAt } from "./autocorrect";
 import type { ContextItem } from "./contextmenu";
+import { newlineCommand } from "./newline";
 import type { TextKind } from "./spelltypes";
 import { type Word, inFenceAt, tokenize } from "./tokenize";
 
@@ -348,7 +349,7 @@ function autocorrect(kind: TextKind): Extension {
           if (!sel.empty) return false;
           const fix = fixAt(view, sel.head, kind);
           if (!fix) return false;
-          insertNewlineAndIndent(view);
+          view.state.facet(newlineCommand)(view);
           applyFix(view, fix);
           return true;
         },

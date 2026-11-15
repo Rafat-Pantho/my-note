@@ -2,8 +2,8 @@ import { listen } from "@tauri-apps/api/event";
 import { redoDepth, undoDepth } from "@codemirror/commands";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import {
-  NO_SPELL, applyZoom, createEditor, makeState, setDirection, setFont, setPrefs, setSpell, setUpdateHandler,
-  withDirection, withPrefs,
+  NO_MD, NO_SPELL, applyZoom, createEditor, makeState, setDirection, setFont, setMd, setPrefs, setSpell,
+  setUpdateHandler, withDirection, withPrefs,
 } from "./editor/editor";
 import { spellKindFor } from "./editor/spelltypes";
 import type { AiController } from "./ai/controller";
@@ -46,6 +46,10 @@ let aiCtl: AiController | null = null;
 let spellMod: typeof import("./editor/spell") | null = null;
 let spellLoading = false;
 let appliedSpell = "";
+/** Markdown mode (toolbar, views, preview). Lazy chunk: null until a Markdown tab is shown. */
+let mdMod: typeof import("./markdown/mode") | null = null;
+let mdUi: InstanceType<typeof import("./markdown/mode").MdUi> | null = null;
+let mdLoading = false;
 // What the editor currently uses, to apply only real changes (a slider fires many updates).
 let appliedTab = 8;
 let appliedCtrl = false;
@@ -150,6 +154,57 @@ function onUpdate(u: ViewUpdate) {
   }
   if (u.docChanged || u.selectionSet) refreshCursor();
   if (u.docChanged && !spellMod) void syncSpell(); // the first text in a tab that needs it loads the chunk
+  if (u.docChanged) mdUi?.docChanged();
+}
+
+const isMdPath = (p: string | null) => /\.(md|markdown)$/i.test(p ?? "");
+const mdWanted = (t: Tab) => t.kind !== "settings" && (t.mdManual ?? isMdPath(t.path));
+
+/** Makes the live view match the tab: Markdown mode (highlighting, list and table keys, toolbar, views) for a
+ *  .md / .markdown file or when the user switched it on, nothing otherwise. Non-Markdown tabs never load the chunk. */
+async function syncMarkdown(): Promise<void> {
+  const tab = active;
+  if (!tab || tab.kind === "settings") return;
+  const want = mdWanted(tab);
+  tab.md = want;
+  document.getElementById("aibtn")!.title = `AI actions (${want ? "Ctrl+Shift+I" : "Ctrl+I"})`;
+  if (!want) {
+    setMd(view, NO_MD);
+    mdUi?.sync(false, "source", tab);
+    return;
+  }
+  if (!mdMod) {
+    if (mdLoading) return;
+    mdLoading = true;
+    try {
+      mdMod = await import("./markdown/mode");
+      mdUi = new mdMod.MdUi(document.getElementById("app")!, document.getElementById("work")!, {
+        view: () => view,
+        flash,
+        setView: (v) => setMdView(v),
+      });
+    } catch {
+      return;
+    } finally {
+      mdLoading = false;
+    }
+    if (active !== tab) return void syncMarkdown(); // the user switched tabs while the chunk loaded
+  }
+  setMd(view, mdMod.extension);
+  mdUi!.sync(true, tab.mdView ?? "source", tab);
+}
+
+function toggleMarkdown() {
+  if (active.kind === "settings") return;
+  active.mdManual = !mdWanted(active);
+  void syncMarkdown();
+  view.focus();
+}
+
+function setMdView(v: "source" | "preview" | "split") {
+  if (active.kind === "settings") return;
+  active.mdView = v;
+  void syncMarkdown().then(() => (v === "preview" ? undefined : view.focus()));
 }
 
 /** Makes the live view match the settings: spell check and autocorrect for the file type of this tab, or
@@ -204,6 +259,7 @@ async function activate(tab: Tab): Promise<void> {
   refreshAll();
   if (!isSettings) view.focus();
   void syncSpell();
+  void syncMarkdown();
   scheduleSession();
 }
 
@@ -509,6 +565,10 @@ async function loadMenus() {
         toggleWrap();
         view.focus();
       },
+      md: () => active.kind !== "settings" && mdWanted(active),
+      toggleMd: toggleMarkdown,
+      mdView: () => active.mdView ?? "source",
+      setMdView,
     }),
     () => (active.kind === "settings" ? undefined : view.focus()),
   );
@@ -530,7 +590,10 @@ async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
   }
   if (!tab.path || saveAs) void recentAdd(path).catch(() => {});
   tab.path = path;
-  if (tab === active) void syncSpell(); // the file type may have changed (Save as .py: no spell check)
+  if (tab === active) {
+    void syncSpell(); // the file type may have changed (Save as .py: no spell check)
+    void syncMarkdown(); // ... and Save as x.md turns Markdown mode on
+  }
   tab.name = basename(path);
   tab.dirty = false;
   tab.stamp = (await fileStamps([path]).catch(() => [null]))[0] ?? undefined;
@@ -659,6 +722,7 @@ async function reloadTab(tab: Tab) {
     refreshAll();
     view.focus();
     void syncSpell();
+    void syncMarkdown();
   }
   scheduleSession();
 }
@@ -771,6 +835,7 @@ async function onEditorContextMenu(e: MouseEvent) {
   const { clientX: x, clientY: y } = e;
   // On a misspelled word: suggestions, Add to dictionary, Ignore (nothing, instantly, anywhere else).
   const spelling = spellMod ? await spellMod.contextItems(view, x, y, flash) : [];
+  const tableItems = mdUi ? mdUi.contextItems(view, x, y) : []; // inside a table: row and column commands
   const quick = (id: "summarize" | "shorten" | "rewrite" | "grammar", label: string) => ({
     label: `AI: ${label}`,
     run: () => void ai().then((c) => c.runQuick(id)),
@@ -779,10 +844,11 @@ async function onEditorContextMenu(e: MouseEvent) {
     x,
     y,
     [
+      ...tableItems,
       ...spelling,
       ...editorItems(view, flash),
       { label: "", sep: true },
-      { label: "AI actions...", hint: "Ctrl+I", run: () => void openAiMenu({ x, y }) },
+      { label: "AI actions...", hint: active.md ? "Ctrl+Shift+I" : "Ctrl+I", run: () => void openAiMenu({ x, y }) },
       quick("summarize", "Summarize"),
       quick("shorten", "Shorten"),
       quick("rewrite", "Rewrite (clearer)"),
@@ -901,7 +967,10 @@ function onKeyDown(e: KeyboardEvent) {
   if (!inDoc && ["s", "f", "h", "g", "p", "i", "e", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
   switch (key) {
     case ",": return run(() => void openSettings());
+    case "m": return e.shiftKey ? run(toggleMarkdown) : undefined;
     case "i":
+      // In Markdown mode Ctrl+I is Italic (the editor's own key); the AI menu is Ctrl+Shift+I there.
+      if (active.md && !e.shiftKey && active.mdView !== "preview") return;
       e.stopPropagation(); // not CodeMirror's own Ctrl+I
       return run(() => void openAiMenu());
     case "e":

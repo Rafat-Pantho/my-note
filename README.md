@@ -16,6 +16,7 @@ Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. N
 - Insert date and time (F5).
 - Session restore: unsaved tabs come back after a restart or a crash.
 - Spell check (red wavy underline, right-click suggestions, Add to dictionary, Ignore) and autocorrect of common typos, both offline and switchable per file type. English (US) is built in; other languages are Hunspell `.dic` + `.aff` files from a folder you choose (nothing is downloaded). Words in a writing system with no loaded dictionary, such as Bengali, are never underlined.
+- Markdown mode for `.md` files (and any tab on request): syntax colours, a formatting toolbar (bold, italic, strikethrough, headings, lists, link, code, quote, table), list continuation with Tab / Shift+Tab nesting, pipe tables that stay aligned (Tab between cells, row and column menu), and Source / Split / Preview views. The preview shows no raw HTML or scripts, opens links only in your browser after you confirm (http, https, mailto), and loads remote images only after you agree, once per file. Files stay plain Markdown.
 - Themes (system, light, dark), font and tab settings in a Settings tab.
 - Optional transparency and blur, with a solid fallback, a Reduce effects setting and a `--no-effects` flag.
 - Optional AI actions (off by default): summarize, fix grammar, shorten, rewrite, change tone, translate, continue writing, or your own instruction. Results go to a preview first. Accept applies one undoable change and keeps a rollback history.
@@ -86,7 +87,9 @@ Optional command-line flags: `--no-effects` starts with solid backgrounds only. 
 | Zoom in / out / reset | Ctrl+= (or Ctrl+Plus) / Ctrl+- / Ctrl+0 |
 | Toggle word wrap | Alt+Z |
 | Insert date and time | F5 |
-| AI actions menu | Ctrl+I |
+| AI actions menu | Ctrl+I (Ctrl+Shift+I in Markdown mode, where Ctrl+I is Italic) |
+| Markdown mode on / off | Ctrl+Shift+M |
+| Bold / Italic (Markdown mode) | Ctrl+B / Ctrl+I |
 | Settings | Ctrl+, |
 
 Undo, redo, select all and the usual editing keys work as in other editors. Ctrl+Z after an AI action undoes that action in one step.
@@ -104,4 +107,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 MIT. See [LICENSE](LICENSE).
 
-Third-party: the spell checker is the [spellbook](https://github.com/helix-editor/spellbook) crate (MPL-2.0). The built-in English dictionary is the SCOWL en_US Hunspell dictionary; its license is in [src-tauri/dict/en_US.LICENSE.txt](src-tauri/dict/en_US.LICENSE.txt).
+Third-party: the spell checker is the [spellbook](https://github.com/helix-editor/spellbook) crate (MPL-2.0). The built-in English dictionary is the SCOWL en_US Hunspell dictionary; its license is in [src-tauri/dict/en_US.LICENSE.txt](src-tauri/dict/en_US.LICENSE.txt). The Markdown preview uses [marked](https://github.com/markedjs/marked) (MIT) and [DOMPurify](https://github.com/cure53/DOMPurify) (MPL-2.0 or Apache-2.0); highlighting uses the [Lezer](https://lezer.codemirror.net/) Markdown parser (MIT).

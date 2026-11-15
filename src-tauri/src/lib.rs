@@ -6,6 +6,7 @@ mod files;
 mod keychain;
 mod spell;
 mod timing;
+mod web;
 
 use std::sync::{
     Mutex,
@@ -343,6 +344,8 @@ pub fn run() {
             spell::spell_languages,
             spell::spell_pick_dir,
             spell::spell_personal_path,
+            web::open_link,
+            web::fetch_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running My Note");

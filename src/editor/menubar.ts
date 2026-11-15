@@ -64,6 +64,10 @@ export interface Commands {
   zoomReset(): void;
   toggleStatusBar(): void;
   toggleWrap(): void;
+  md(): boolean;
+  toggleMd(): void;
+  mdView(): "source" | "preview" | "split";
+  setMdView(v: "source" | "preview" | "split"): void;
 }
 
 const SEP: Entry = { label: "", sep: true };
@@ -149,6 +153,16 @@ export function menuDefs(c: Commands): MenuDef[] {
         { label: "&Status bar", checked: c.statusBar(), run: c.toggleStatusBar },
         { label: "Show &control characters", checked: c.controlChars(), run: c.toggleControlChars },
         { label: "&Word wrap", hint: "Alt+Z", checked: c.wrap(), disabled: !doc(), run: c.toggleWrap },
+        SEP,
+        { label: "&Markdown mode", hint: "Ctrl+Shift+M", checked: c.md(), disabled: !doc(), run: c.toggleMd },
+        {
+          label: "Markdown vie&w",
+          sub: [
+            { label: "&Source", checked: c.mdView() === "source", disabled: !doc() || !c.md(), run: () => c.setMdView("source") },
+            { label: "S&plit", checked: c.mdView() === "split", disabled: !doc() || !c.md(), run: () => c.setMdView("split") },
+            { label: "&Preview", checked: c.mdView() === "preview", disabled: !doc() || !c.md(), run: () => c.setMdView("preview") },
+          ],
+        },
       ],
     },
   ];

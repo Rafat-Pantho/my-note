@@ -24,6 +24,9 @@ const dirComp = new Compartment();
 /** Per-state spell check / autocorrect (the lazy chunk's extension, or nothing). */
 const spellComp = new Compartment();
 export const NO_SPELL: Extension = [];
+/** Per-state Markdown mode (the lazy chunk's extension, or nothing). */
+const mdComp = new Compartment();
+export const NO_MD: Extension = [];
 /** Holds extensions that are lazy-loaded (search). Empty until the find chunk loads. */
 const lazyComp = new Compartment();
 let lazyExt: Extension = [];
@@ -71,6 +74,7 @@ export function makeState(doc: string, wrap: boolean): EditorState {
       ctrlComp.of(ctrlExt(showCtrl)),
       dirComp.of([]),
       spellComp.of(NO_SPELL),
+      mdComp.of(NO_MD),
       keymap.of([
         { key: "Tab", run: insertTab },
         { key: "Shift-Tab", run: indentLess },
@@ -120,6 +124,11 @@ export const spellOf = (state: EditorState): Extension => spellComp.get(state) ?
 /** Turns spell check / autocorrect on the live view on or off (`NO_SPELL`). Does nothing if already so. */
 export function setSpell(view: EditorView, ext: Extension): void {
   if (spellOf(view.state) !== ext) view.dispatch({ effects: spellComp.reconfigure(ext) });
+}
+
+/** Turns Markdown mode on the live view on or off (`NO_MD`). Does nothing if already so. */
+export function setMd(view: EditorView, ext: Extension): void {
+  if ((mdComp.get(view.state) ?? NO_MD) !== ext) view.dispatch({ effects: mdComp.reconfigure(ext) });
 }
 
 /** Font settings: size in px at 100% zoom, and the user's font-family list ("" = built-in stack). */

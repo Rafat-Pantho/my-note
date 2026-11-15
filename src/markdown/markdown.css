@@ -1,0 +1,50 @@
+/* Markdown mode (lazy chunk, loaded with mode.ts): toolbar, split layout and the preview. Theme variables only. */
+#mdbar { display: flex; align-items: center; gap: 2px; flex: none; padding: 4px 8px; background: var(--s-strip);
+  border-bottom: 1px solid var(--border); font-size: 13px; overflow-x: auto; scrollbar-width: none; }
+#mdbar[hidden] { display: none; }
+#mdbar button { min-width: 28px; height: 26px; padding: 0 8px; border-radius: 5px; color: var(--fg); white-space: nowrap; }
+#mdbar button:hover:not(:disabled) { background: var(--bg-hover); }
+#mdbar button:disabled { color: var(--fg-dim); cursor: default; opacity: 0.55; }
+#mdbar .b { font-weight: 700; }
+#mdbar .i { font-style: italic; }
+#mdbar .s { text-decoration: line-through; }
+#mdbar .sep { width: 1px; height: 16px; margin: 0 6px; background: var(--border); }
+#mdbar .sp { flex: 1; }
+#mdbar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#mdbar .seg button { border-radius: 0; height: 24px; color: var(--fg-dim); }
+#mdbar .seg button[aria-pressed="true"] { background: var(--bg-hover-strong); color: var(--fg); }
+
+#mdpreview { display: none; flex: 1 1 0; min-width: 0; overflow: auto; background: var(--s-bg); user-select: text; outline: none; }
+#app.md-split #mdpreview, #app.md-preview #mdpreview { display: block; }
+#app.md-split #mdpreview { border-left: 1px solid var(--border); }
+#app.md-preview #editor { display: none; }
+
+.md-banner { margin: 10px 20px 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-hover); font-size: 12px; color: var(--fg-dim); }
+.md-banner button { margin-left: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 5px; color: var(--fg); }
+.md-banner button:hover { background: var(--bg-hover-strong); }
+
+.md-body { max-width: 860px; margin: 0 auto; padding: 16px 28px 48px; font: 15px/1.6 var(--ui-font); color: var(--fg);
+  overflow-wrap: anywhere; }
+.md-body > :first-child { margin-top: 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4, .md-body h5, .md-body h6 { margin: 1.4em 0 0.5em; line-height: 1.25; font-weight: 600; }
+.md-body h1 { font-size: 1.9em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
+.md-body h2 { font-size: 1.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--border); }
+.md-body h3 { font-size: 1.25em; }
+.md-body h4 { font-size: 1.05em; }
+.md-body h5, .md-body h6 { font-size: 0.95em; color: var(--fg-dim); }
+.md-body p, .md-body ul, .md-body ol, .md-body blockquote, .md-body pre, .md-body table { margin: 0 0 1em; }
+.md-body ul, .md-body ol { padding-left: 1.8em; }
+.md-body li > ul, .md-body li > ol { margin: 0.2em 0 0; }
+.md-body li input[type=checkbox] { margin: 0 0.4em 0 -1.2em; vertical-align: middle; }
+.md-body blockquote { padding: 0 1em; color: var(--fg-dim); border-left: 3px solid var(--border); }
+.md-body code { padding: 0.15em 0.35em; border-radius: 4px; background: var(--bg-hover); font: 0.9em var(--mono-font); }
+.md-body pre { padding: 10px 12px; overflow: auto; border-radius: 6px; background: var(--bg-hover); }
+.md-body pre code { padding: 0; background: none; }
+.md-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
+.md-body a[data-href] { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.md-body img { max-width: 100%; height: auto; }
+.md-body table { border-collapse: collapse; display: block; max-width: 100%; overflow: auto; }
+.md-body th, .md-body td { padding: 5px 12px; border: 1px solid var(--border); }
+.md-body th { background: var(--bg-hover); font-weight: 600; }
+.md-note { color: var(--fg-dim); font-size: 0.85em; font-style: italic; padding: 1px 5px; border: 1px dashed var(--border); border-radius: 4px; }
