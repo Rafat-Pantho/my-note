@@ -24,7 +24,7 @@ Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. N
 
 Go to [GitHub Releases](https://github.com/Rafat-Pantho/my-note/releases) and download the file you want:
 
-- `My-Note_<version>_x64-setup.exe` or `.msi`: Windows installer. The installer fetches WebView2 only if it is missing.
+- `My.Note_<version>_x64-setup.exe` or `My.Note_<version>_x64_en-US.msi`: Windows installer. The installer fetches WebView2 only if it is missing.
 - `My-Note_<version>_windows-x64-portable.zip`: the program as a single exe, no install.
 - macOS (`.dmg`) and Linux (`.deb`, `.rpm`, `.AppImage`) builds are produced by the release workflow. They are not tested on every release.
 - `SHA256SUMS`: check your download against it.
