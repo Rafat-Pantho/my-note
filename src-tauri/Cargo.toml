@@ -30,6 +30,8 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-no-p
 # The crypto provider reqwest's `rustls-no-provider` needs. `ring` rather than the default aws-lc-rs: smaller
 # and builds without cmake/nasm.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+# "Open with" / double-click while running hands the file to the open window (one new crate, no new deps).
+tauri-plugin-single-instance = "2"
 
 # windows-sys: startup timing (process creation time), plus registry and high-contrast reads for the effects
 # fallback checks. windows-version: OS build number (the crate window-vibrancy gates on). Both are already in

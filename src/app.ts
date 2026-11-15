@@ -1059,5 +1059,7 @@ export async function boot() {
   }
 
   void listen<{ paths: string[] }>("tauri://drag-drop", (e) => void openPaths(e.payload.paths));
+  // A second launch (double-click, Open with) passes its files here; the window was already brought forward.
+  void listen<string[]>("open-paths", (e) => void openPaths(e.payload));
   void listen("close-requested", () => void closeApp());
 }

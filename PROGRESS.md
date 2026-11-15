@@ -15,6 +15,37 @@
 - [x] A2 Text-handling extras (see the A2 section)
 - [x] A3 Spell check and autocorrect (see the A3 section)
 - [x] A4 Markdown mode (see the A4 section)
+- [x] A5 File associations and polish (see the A5 section)
+
+## A5 File associations and polish
+Checks: `tsc` clean, `npm test` 202 pass, `cargo fmt` applied, `cargo clippy --all-targets -D warnings` clean, `cargo test` 119 pass (unchanged: no pure logic was added; the path helper is covered by the existing command-line flag tests only through the same code path). Release exe 6,966,272 bytes (6.6 MB, budget 10 MB; +4,096 bytes vs A4). Initial JS 106.2 kB gzipped (level 9, by 1000; A4 106.0; budget 300 KB). The `listen("open-paths")` line is the only frontend addition.
+
+### Done
+- File associations: `bundle.fileAssociations` in `tauri.conf.json` for `txt` (text/plain), `md` + `markdown` (text/markdown) and `log` (text/plain), role Editor. The NSIS / MSI installers register them so *Open with* lists My Note. Nothing sets My Note as the default: no `default` flag, no registry write from our code.
+- Single instance: `tauri-plugin-single-instance` 2.5.5 (one new crate; no new transitive packages). A second launch with file paths (double-click, *Open with*) sends them to the running window through the event `open-paths`; the first window unminimizes, shows and focuses itself; the frontend opens the paths with the existing `openPaths` (new tab, or the existing tab if the file is already open). The second process exits at once with code 0. Relative paths are resolved against the second process's working directory.
+- The plugin is installed only in the first process. A window started with `--new-window` (File > New window, Move to new window) skips it, so it is never handed to the running window. Checked: `--new-window` starts a second process, and that process keeps running.
+- Docs: README features, file types, the shortcut table (Redo, Select all, Close window, the menu-only and tab-menu items) and the command-line notes now match A1 to A4. CI is unchanged: the new crate is pure Rust, so no new system packages are needed on the Ubuntu runner.
+
+### Startup measurement (Windows 11 build 26300, release exe, MYNOTE_TIMING=1)
+- 10 runs, each started, read and killed after 3 s (PowerShell script). Medians: setup start 384 ms (range 356-588), setup done 396 ms, editor ready 458 ms (range 430-658), window shown 483 ms (range 445-683). Setup done to editor ready: median 66 ms (A4: about 67 ms, so our own part did not change).
+- The single-instance check runs in the Tauri builder, before `setup`; its cost sits in the interval from `run` (10-24 ms) to `setup start`, which is mostly WebView2 and window creation. I did not build an A4 exe again for a same-hour comparison, so the plugin's own cost is NOT isolated. The A4 medians (461 / 485 ms ready / shown, 16 runs on a noisier hour) are in the same range. The 400 ms budget is still NOT met.
+
+### Decisions / limits
+- A second launch that carries no file just focuses the window (no new tab).
+- If a `--new-window` process is the last one open and the user double-clicks a file, that file starts a new first instance (the lock belongs to the first process only). Acceptable: the first window is the one that receives files.
+- File associations are written only by the installers. The portable zip does not register anything; double-click on a file works there only if Windows already associates the extension with My Note.
+
+### QA scenarios to verify (A5)
+1. Install the NSIS (or MSI) build. Right-click a `.txt`, `.md`, `.markdown` and `.log` file: *Open with* lists My Note. The file's default program does not change (check *Default apps* in Windows Settings: My Note is not set).
+2. Double-click a `.txt` with the app CLOSED: one window opens with that file in its own tab; the title shows its name.
+3. Double-click a `.txt` with the app RUNNING (one window, with a file open): no second window appears; the second process exits; the existing window comes to the front (also when minimized) and the file opens in a new tab. The tab count goes up by one.
+4. Double-click the same file again while it is open in a tab: the existing tab is activated; no duplicate tab.
+5. Double-click two files at once (select both, Enter): both open in tabs of the running window.
+6. A `.md` file while running: opens in Markdown mode (toolbar visible), as when opened from inside the app.
+7. Start the app with `--new-window` plus a file (File > New window / Ctrl+Shift+N): a second window starts; double-clicking another file afterwards goes to the first window, not into the new one.
+8. Double-click a file whose name has spaces or non-ASCII letters (e.g. Bengali): the right tab opens.
+9. Relative path on the command line (`my-note.exe notes.txt` from another folder): resolved against the caller's folder.
+10. Not tested: installer on a clean machine, uninstall (associations removed), macOS and Linux (`fileAssociations` mapped by Tauri, the single-instance plugin uses D-Bus on Linux and was never run), Windows 10, a file on a network drive, running as Administrator.
 
 ## A4 Markdown mode
 Checks: `tsc` clean, `npm test` 202 pass (105 + 97: lists 12, tables 18, format 12, links 3, sanitizer 48 (41 XSS fixtures + rendering), quote 2, AI + Markdown 2), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 119 pass (114 + 5 in `web`). Release exe 6,962,176 bytes (6.6 MB, budget 10 MB; +61,952 bytes vs A3: the link/image helper module and its tests of the existing HTTP client). Initial JS 106.0 kB gzipped by 1000 (103.5 by 1024; A3 104.1; budget 300 KB): +1.9 kB, all of it CodeMirror's `@codemirror/language` pieces that the Markdown chunk shares with `commands`, plus the compartment, the menu items and the hooks in `app.ts`. Lazy and NOT in `dist/index.html`: Markdown mode chunk 54.1 kB raw / 18.3 kB gz (+ 3.2 kB / 1.1 kB CSS), preview chunk (marked + DOMPurify) 82.9 kB / 27.9 kB gz. A non-Markdown tab requests neither (checked in the real app: the page's resource list has no `mode-` or `preview-` entry, no `#mdbar` and no `#mdpreview` element). Total cost for someone who uses Markdown with preview: 47.2 kB gz, fetched once from inside the exe (nothing from the network). Startup, 16 runs on a noisier hour than A3, editor ready / shown medians: 461 / 485 ms (A3 423 / 431; the part before our code, "setup done", was 390 ms vs 366 ms, so most of the difference is WebView2 or the machine; our own part, setup done -> ready, was about 67 ms vs 57 ms: I cannot prove from this that nothing changed). The 400 ms budget is still NOT met.

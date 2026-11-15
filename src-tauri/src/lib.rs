@@ -168,19 +168,42 @@ fn exit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// File paths passed on the command line ("Open with"). Flags are ignored.
-#[tauri::command]
-fn take_launch_args() -> Vec<String> {
-    std::env::args_os()
-        .skip(1)
-        .filter(|a| !a.to_string_lossy().starts_with('-'))
+/// File paths from a command line ("Open with"). Flags are ignored; relative paths are resolved against `cwd`.
+fn paths_from_args<I: IntoIterator<Item = S>, S: AsRef<std::ffi::OsStr>>(
+    args: I,
+    cwd: &std::path::Path,
+) -> Vec<String> {
+    args.into_iter()
+        .filter(|a| !a.as_ref().to_string_lossy().starts_with('-'))
         .map(|a| {
-            std::path::absolute(&a)
-                .unwrap_or_else(|_| a.into())
+            let p = cwd.join(a.as_ref());
+            std::path::absolute(&p)
+                .unwrap_or(p)
                 .to_string_lossy()
                 .into_owned()
         })
         .collect()
+}
+
+/// File paths passed on the command line of this process. Flags are ignored.
+#[tauri::command]
+fn take_launch_args() -> Vec<String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    paths_from_args(std::env::args_os().skip(1), &cwd)
+}
+
+/// Second launch (double-click or "Open with" while the app runs): the first instance gets the paths in a
+/// new tab and is brought to the front. The second process exits as soon as the plugin has handed over.
+fn second_launch(app: &AppHandle, args: Vec<String>, cwd: String) {
+    let paths = paths_from_args(args.iter().skip(1), std::path::Path::new(&cwd));
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    if !paths.is_empty() {
+        let _ = app.emit("open-paths", paths);
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -252,7 +275,13 @@ fn refresh_appearance(app: &AppHandle) {
 
 pub fn run() {
     timing::report("run");
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    // A window started by File > New window (`--new-window`) is a separate window on purpose: it must not be
+    // handed to the running instance, so the plugin is only installed in the first process.
+    if !config::is_secondary() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(second_launch));
+    }
+    builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             timing::report("setup start");
