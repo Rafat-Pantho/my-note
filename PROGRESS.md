@@ -29,8 +29,20 @@ All runs below drove the real release exe over the WebView2 debug port with real
 | 8 | Session restore after forced close | PASS | Edited a file tab (unsaved) and a second Untitled tab, waited 3 s, `taskkill /F /T`. Disk file untouched; on relaunch both tabs came back with the exact unsaved text (Bengali included). The 1.5 s write delay means edits in the last 1.5 s before a kill are lost (by design). |
 
 ## Open items after M8
-- Scenario 1 finding above (WebView2's own Microsoft connection from the 2nd run on). Decide whether to investigate with a capture / firewall test; the rule "no network at startup" is met by our code but not provably by the embedded runtime.
-- Startup budget (400 ms) still not reliably met (M6). Median ready 399 ms / shown 441 ms; `--disable-gpu` default still undecided.
+- Scenario 1 finding: FIXED (see "Post-M9 fixes" below). Startup now makes 0 outside connections.
+- Startup budget (400 ms): still NOT met. The window now shows about 30-40 ms sooner (see below), but "editor ready" is unchanged and about 340 ms of it is WebView2 starting before any of our code runs. `--disable-gpu` default still undecided (no gain in "ready" today).
+
+## Post-M9 fixes (2026-11-15, release exe, Windows 11 build 26300, WebView2 157.0.4341.46)
+- WebView2 network at startup. Found with a Chromium net log plus a socket list of the WebView2 process tree:
+  1. `oneauth.dll` + `MicrosoftAccountWAMExtension.dll` load in the WebView2 browser process and open HTTPS to `substrate.office.com` / `outlook.office365.com` (40.99.x / 52.98.x / 40.104.x: the M8 finding). They use the Windows network stack, so they are not in the net log and `--host-resolver-rules` did not stop them. Disabling the Edge features `msOneAuthWAM` AND `msForceOneAuthWAM` (both needed; found by bisecting 15 candidates) stops it.
+  2. Edge's config fetch (`config.edge.skype.com`), a Network Error Logging report (`ecs.nel.measure.office.net`) and WPAD proxy lookups, through Chromium's stack. Stopped by `--host-resolver-rules="MAP * ~NOTFOUND"`, `NetworkErrorLogging,Reporting` disabled and `--no-proxy-server`.
+  - Fix: `additionalBrowserArgs` on the main window in `tauri.conf.json` (Windows only). It REPLACES wry's default args, so it repeats them (`msWebOOUI,msPdfOOUI,msSmartScreenProtection`, autoplay policy). The page never needs the network (custom protocol + IPC are served in-process; CSP already blocks fetch), and all AI HTTP is in Rust, so this blocks nothing we use.
+  - Verified on the rebuilt exe with no env var: browser command line carries the flags; 3 launches x 10 s: 0 outside TCP connections from my-note.exe and every WebView2 process (before: 1-2 every launch); net log shows no successful outside request; typing works, no console errors.
+  - Caveat: these are Edge-internal feature names and may change in a later WebView2 runtime. Re-check with a socket list after runtime updates.
+- Startup: the window is shown right after the editor is built instead of after two animation frames (a hidden WebView2 window does not paint, so the wait only delayed the show). Screen capture at the moment the window turns visible: the first frame already shows the painted editor, no blank or white frame.
+  - Today, 7-9 runs each (this machine is slower today than in M6): before, ready 429 / shown 469 ms (medians); new flags alone, 428 / 487 (no change); both changes, ready 436 / shown 443. With `--disable-gpu` too: 433 / 444 and about 100 MB less private memory. So the visible window gained about 30 ms; "ready" did not move.
+  - Process start times: WebView2 browser process at 65 ms, GPU/network at about 190, renderer at about 265, page at about 340; our `setup` takes 3 ms. What is left is the WebView2 runtime itself; nothing more to gain in our code without a different engine.
+- Checks: tsc clean, `npm test` 60 pass, cargo fmt / clippy `-D warnings` clean, `cargo test` 86 pass.
 - Not covered anywhere: macOS, Linux, Windows 10, real cloud-provider chats, GitHub workflows (never run).
 
 ## M6 results (release, Windows 11 build 26300) - full numbers and how to reproduce: docs/PERFORMANCE.md

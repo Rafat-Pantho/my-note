@@ -19,7 +19,8 @@
         "height": 650,
         "visible": false,
         "transparent": true,
-        "backgroundColor": "#1e1e1e"
+        "backgroundColor": "#1e1e1e",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,msOneAuthWAM,msForceOneAuthWAM,NetworkErrorLogging,Reporting --autoplay-policy=no-user-gesture-required --no-proxy-server --host-resolver-rules=\"MAP * ~NOTFOUND\""
       }
     ],
     "security": {

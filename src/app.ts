@@ -591,15 +591,10 @@ export async function boot() {
 
   marks.push(`active ${Math.round(performance.now())}`);
   void editorReady(marks.join(", "));
-  // Show the window only after the first frame has been painted.
-  const shown = new Promise<void>((resolve) =>
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        void showWindow();
-        setTimeout(resolve, 60); // let the show reach Rust before any heavy parsing
-      }),
-    ),
-  );
+  // Show the window now: a hidden WebView2 window does not paint, so waiting for frames only delayed the show.
+  // The editor DOM is built and the window background already has the theme colour.
+  void showWindow();
+  const shown = new Promise<void>((resolve) => setTimeout(resolve, 60)); // let the show reach Rust before heavy parsing
   if (restoring) {
     restoreDone = shown
       .then(() => loadSessionBytes(true))

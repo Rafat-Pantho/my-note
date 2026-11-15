@@ -1,5 +1,9 @@
 # Performance (M6)
 
+> Update 2026-11-15: the window is now shown as soon as the editor is built (no two-frame wait), about 30 ms
+> sooner; "editor ready" is unchanged. WebView2 also gets extra args that stop its own startup connections. See
+> "Post-M9 fixes" in PROGRESS.md for numbers.
+
 Measured on the release exe, Windows 11 build 26300, warm disk, 2026-11-15. One machine only; treat differences
 under about 20 ms as noise (run-to-run spread here is 20-40 ms).
 
