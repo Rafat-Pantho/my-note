@@ -70,11 +70,16 @@ Optional command-line flags: `--no-effects` starts with solid backgrounds only. 
 | Action | Shortcut |
 |---|---|
 | New tab | Ctrl+N or Ctrl+T |
+| New window | Ctrl+Shift+N |
+| Reopen closed tab (last 10) | Ctrl+Shift+T |
+| Menus (File, Edit, View) | Alt+F / Alt+E / Alt+V, then arrow keys or the underlined letter |
 | Open file | Ctrl+O |
 | Save / Save as | Ctrl+S / Ctrl+Shift+S |
 | Close tab | Ctrl+W |
 | Next / previous tab | Ctrl+PageDown / Ctrl+PageUp |
 | Find / Replace | Ctrl+F / Ctrl+H |
+| Find next / previous | F3 / Shift+F3 |
+| Search the web for the selection | Ctrl+E (asks for a search engine the first time) |
 | Go to line | Ctrl+G |
 | Print | Ctrl+P |
 | Zoom in / out / reset | Ctrl+= (or Ctrl+Plus) / Ctrl+- / Ctrl+0 |

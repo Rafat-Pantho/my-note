@@ -36,7 +36,16 @@ export function writeFile(path: string, text: string, encoding: string, lineEndi
 export const pickOpenFiles = () => invoke<string[]>("pick_open_files");
 export const pickSavePath = (defaultName: string) =>
   invoke<string | null>("pick_save_path", { defaultName });
-export const takeLaunchArgs = () => invoke<string[]>("take_launch_args");
+/** Last opened files that still exist (paths only). */
+export const recentList = () => invoke<string[]>("recent_list");
+export const recentAdd = (path: string) => invoke<void>("recent_add", { path });
+export const recentClear = () => invoke<void>("recent_clear");
+/** Opens the chosen search engine in the system browser. Rejects with "no-engine" until one is chosen. */
+export const searchWeb = (query: string) => invoke<void>("search_web", { query });
+export const showInFolder = (path: string) => invoke<void>("show_in_folder", { path });
+/** Starts another window (a new process) that opens these files. */
+export const newWindow = (paths: string[]) => invoke<void>("new_window", { paths });
+export const takeLaunchArgs =() => invoke<string[]>("take_launch_args");
 export const setTitle = (title: string) => invoke<void>("set_title", { title });
 export const exitApp = () => invoke<void>("exit_app");
 export const showWindow = () => invoke<void>("show_window");

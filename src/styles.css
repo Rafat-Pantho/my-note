@@ -82,6 +82,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #app.on-settings #editor { display: none; }
 /* On the Settings tab the status bar keeps only the AI indicator: it must always be visible. */
 #app.on-settings #statusbar > :not(.ai):not(.sp) { display: none; }
+/* View > Status bar off: same rule (the AI indicator is never hidden); transient messages still show. */
+#app.no-status #statusbar > :not(.ai):not(.sp):not(.msg) { display: none; }
 
 /* ---------- tabs (browser style) ---------- */
 #tabbar { display: flex; align-items: flex-end; flex: none; background: var(--s-strip); padding: 6px 6px 0; gap: 2px; }
@@ -109,7 +111,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .tabbtn:hover { background: var(--bg-hover); color: var(--fg); }
 #newtab { width: 28px; padding: 0; font-size: 16px; }
 #tabbar .sp { flex: 1; }
-#settingsbtn { font-size: 12px; }
+
+/* ---------- menu bar (File, Edit, View + the Settings gear). The row is reserved in the HTML; the menus are
+   built after the first paint, so nothing shifts when they appear. ---------- */
+#menubar { display: flex; align-items: center; flex: none; height: 30px; padding: 0 6px; background: var(--s-strip); }
+#menubar .sp { flex: 1; }
+#menus { display: flex; gap: 2px; }
+.mb-btn { height: 24px; padding: 0 10px; border-radius: 6px; color: var(--fg); transition: background var(--dur); }
+.mb-btn:hover, .mb-btn.open { background: var(--bg-hover-strong); }
+.mb-btn u, .menu.bar u { text-decoration: none; border-bottom: 1px solid currentColor; }
+#settingsbtn { margin: 0; height: 24px; font: 15px/1 "Segoe UI Symbol", var(--ui-font); }
+.menu.bar { min-width: 230px; }
+.menu.bar > button { padding-left: 26px; }
+.menu.bar > button.on::before { left: 9px; }
+.menu.bar > button.hl:not(:disabled) { background: var(--bg-hover); }
+.menu.bar .hint { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- status bar ---------- */
 #statusbar { display: flex; align-items: center; gap: 2px; height: 26px; padding: 0 6px; flex: none;

@@ -42,6 +42,11 @@ export function modal(opts: ModalOptions): Promise<{ button: string; value: stri
     });
     box.append(row);
     bg.append(box);
+    // Pressing a button must not move the browser's text selection: clicking one used to collapse the
+    // editor's selection behind the dialog.
+    bg.addEventListener("mousedown", (e) => {
+      if ((e.target as HTMLElement).closest("button")) e.preventDefault();
+    });
     bg.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Escape") done(opts.buttons[opts.buttons.length - 1]);

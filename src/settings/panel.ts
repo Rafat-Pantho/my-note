@@ -97,6 +97,33 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
     return wrap;
   };
 
+  /** Ctrl+E engine. "Custom" shows up only while a custom address is set (it is chosen in the Ctrl+E dialog). */
+  const searchEngine = () => {
+    const c = el("select");
+    for (const [label, v] of [["Ask on first use", ""], ["Bing", "bing"], ["Google", "google"], ["DuckDuckGo", "duckduckgo"]]) {
+      c.append(new Option(label, v));
+    }
+    const custom = new Option("", "custom");
+    c.append(custom);
+    c.onchange = () => void save({ searchEngine: c.value });
+    syncs.push((a) => {
+      const v = a.settings.searchEngine;
+      const known = ["", "bing", "google", "duckduckgo"].includes(v);
+      custom.hidden = known;
+      if (!known) {
+        let host = v;
+        try {
+          host = new URL(v.replace("%s", "x")).host;
+        } catch {
+          /* show the raw text */
+        }
+        custom.text = `Custom: ${host}`;
+      }
+      c.value = known ? v : "custom";
+    });
+    return c;
+  };
+
   const effectMode = () => {
     const c = select("effects", [
       { label: "Off (solid)", value: "off" },
@@ -177,6 +204,8 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
       row("Font size", number("fontSize", 8, 48), "Pixels at 100% zoom"),
       row("Tab size", number("tabSize", 1, 16), "Width of a tab character, in spaces"),
       row("Restore session", checkbox("restoreSession"), "Reopen tabs and unsaved text at startup"),
+      row("Open files in a new window", checkbox("openInNewWindow"), "File > Open and Recent. Off: a new tab"),
+      row("Search engine", searchEngine(), "Ctrl+E sends the selected text to it, in your browser"),
     ),
     appearance: section(
       "Appearance",

@@ -11,6 +11,45 @@
 - [x] M7 GitHub builds and releases (CI workflow, draft release workflow, portable zip, SHA256SUMS; see below)
 - [x] M8 Final QA (table below; one open finding)
 - [x] M9 README, license, contributing (three items left for the owner, see the M9 section)
+- [x] A1 Menus, recent files, tab and find extras (see the A1 section)
+
+## A1 Menus, recent files, tab and find extras
+Checks: `tsc` clean, `npm test` 67 pass (60 + 7 closed-tab tests), `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 99 pass (86 + 13). Release exe 6,048,768 bytes (5.8 MB, budget 10 MB; +38 KB). Initial JS 98.1 kB gz (index 9.99 + CodeMirror chunk 88.3 + appearance 2.2; budget 300 KB) + 2.7 kB CSS. The menu bar is its own lazy chunk (2.4 kB gz, fetched after the first paint); the engine dialog is another (0.6 kB gz). Startup (7 runs each, editor ready / shown, medians): 442 / 455 ms with no saved window, 429 / 445 ms with a saved window position (the restore cost is not measurable). Same as before A1 within noise; the 400 ms budget is still NOT met (see Open items after M8).
+
+Done
+- Menu bar: File, Edit, View + Settings gear at the right, built after the first paint (`requestAnimationFrame` + timeout, then a dynamic import). The row is reserved in the HTML so nothing shifts. Alt+F/E/V, arrow keys, Home/End, Enter/Space, underlined access keys inside menus, Right/Left switch menus, Escape, hover switching, submenus (Recent, Zoom). Code: `src/editor/menubar.ts`; every command lives in `app.ts` (`loadMenus`).
+- Recent files: last 20, newest first, no duplicates (case-insensitive on Windows), only paths in `config.json` (`recentFiles`), missing files skipped when the menu opens (not forgotten, so an unplugged drive does not wipe the list), "Clear list". Added on open (also launch args and drag-drop) and on first save / Save as. Rust: `push_recent`, `parse_recent`, `existing_recent`, commands `recent_list/add/clear`.
+- Setting "Open files in a new window" (Settings > General, default off) applies to File > Open and Recent. An empty window just takes the file.
+- Tab context menu: Close, Close other tabs, Close tabs to the right, Copy file path, Show in file manager (Explorer `/select`, Finder `-R`, xdg-open on the folder), Move to new window. Reopen closed tab Ctrl+Shift+T (last 10, `src/tabs/closed.ts`): a file tab is read from disk again, an untitled tab brings its text back (up to 1 MB), a file that is open again is skipped.
+- Find: F3 / Shift+F3 work with the panel closed (the first press with no search text opens the panel), Ctrl+F is seeded with the selected single-line text (already so), Replace all says "Replaced N occurrences".
+- Search web (Ctrl+E, Edit menu): the first use asks Bing / Google / DuckDuckGo / Custom URL (needs http(s) and `%s`), remembered in `config.json` (`searchEngine`, also in Settings > General). Only on that action; the text is trimmed, whitespace collapsed, cut to 1000 characters and percent-encoded in Rust; opened by `files::open_url`, which accepts http/https only (the Ollama link uses it too). No selection: a short message, nothing opens.
+- Window size and position: saved at exit by the first window (`window` in `config.json`, physical pixels, plus maximized), restored before the window is shown if its title bar is still on a monitor (`WindowGeom::is_reachable`); an off-screen position is ignored.
+- View: Zoom (in/out/restore), Status bar toggle, Word wrap.
+
+Decisions
+- Extra windows are new processes (`--new-window`, plus `--no-effects` if given). They start with no session, never read or write `session.json` and never save the window geometry, so the first window keeps ownership; they open 32 px down-right of the saved position. Consequences: unsaved text in an extra window is not restored after a crash; two windows share `config.json` and the last one to write wins (a recent-list entry from the other window can be lost).
+- NOT done: dragging a tab out of the window. A real tab-to-window transfer needs a second webview or a handoff of the tab text between processes, which is too heavy for the budgets. "Move to new window" is in the tab menu instead: it asks to save first (an untitled or unsaved tab must be on disk to move), opens the file in a new window and closes the tab here.
+- Exit and Close window do the same thing (close this window, with the save prompts): every window is its own process, so there is no "all windows" to exit.
+- View > Status bar off keeps only the AI indicator (and transient messages), because the status bar must always show the active AI environment and whether it is local or remote. Same rule as the Settings tab.
+- Save all has no shortcut (Ctrl+Alt+S would collide with AltGr on some layouts).
+- Dialog buttons now keep the editor's selection: a mouse press on a modal button used to collapse the selection behind the dialog (found while testing the Ctrl+E dialog).
+- Window events record the last normal rectangle with no I/O. Maximizing sends a Moved to the screen corner before the window reports maximized, so events from a window that already fills the work area are ignored (found by test: x/y were saved as -8/-8).
+- Dependencies: none added.
+
+QA scenarios to verify
+1. Alt+F, Alt+E, Alt+V open the menus; arrows, Enter, Escape and the underlined letters work; the gear opens Settings.
+2. File > Recent: newest first, a file deleted on disk is not listed, Clear list empties it, `config.json` holds only paths.
+3. Setting "Open files in a new window" on: File > Open and a recent file open another window; off: a new tab. With an empty untitled window, it opens in place either way.
+4. Right-click a tab: all six items; Copy file path (paste it elsewhere); Show in file manager selects the file; Close other tabs / to the right ask about unsaved tabs; Move to new window on a saved and on an unsaved tab.
+5. Ctrl+Shift+T reopens up to 10 tabs, newest first; an untitled tab comes back with its text; a file already reopened is skipped.
+6. F3 / Shift+F3 with the find panel closed; Ctrl+F with a selection fills the box; Replace all prints the count (0, 1, many).
+7. Ctrl+E: the first use asks for the engine; pick each one (and a custom URL with %s) and check the browser URL; nothing is sent with no selection; change the engine in Settings.
+8. Resize, move and maximize, exit, relaunch: same place; change a monitor setup so the saved spot is off screen: the window opens at the default place.
+9. View: Zoom items, Status bar off (AI indicator stays) and back, Word wrap check mark.
+10. Ctrl+Shift+N and File > New window: a second window with no tabs from the first; closing it does not touch the first window's session.
+11. Not tested: macOS and Linux (Finder / xdg-open, window restore, menu look), Windows 10, a left or top taskbar, a second monitor, high DPI scaling (restore uses physical pixels), keyboard layouts where the system uses Alt+letter.
+
+Verified on the real release exe over the WebView2 debug port (46 checks, all pass on the last two runs; throwaway scripts, app data backed up and restored afterwards): every menu item and shortcut label, keyboard and mouse navigation, the Zoom submenu, the Status bar toggle, recent order and skipping a missing file, opening a recent file, the tab menu (states for untitled / file / last tab, Copy file path read back from the clipboard, close-to-the-right with the unsaved prompt), reopen closed tab (with text, and the empty message), F3 / Shift+F3 / seeded Ctrl+F / Replace all count, the Ctrl+E dialog (cancel stores nothing, a custom URL without %s is refused, nothing selected says so), the Settings rows, open-in-new-window (a second process with `--new-window` and the file), Ctrl+Shift+N, window position/size restore (Win32 `MoveWindow` / `GetWindowRect`), maximized restore and an off-screen saved position. One earlier run had a single failure of "Alt+E opens Edit" that did not repeat in three later runs; cause not found (key timing in the driver is the likely one). NOT run: opening the browser for a real search (URL building is unit tested; `open_url` only accepts http/https), Show in file manager and Move to new window were not clicked on the real exe.
 
 ## M8 Final QA (release exe from `tauri build --no-bundle`, Windows 11 build 26300)
 Checks: `tsc` clean, `npm test` 60 pass, `cargo fmt --check` clean, `cargo clippy --all-targets -D warnings` clean, `cargo test` 86 pass, release build OK: exe 6,010,368 bytes (5.7 MB, budget 10 MB), initial JS unchanged from M6 (98.9 kB gz). Note: plain `cargo build --release` makes an exe that loads the dev URL (blank page); always use `npx tauri build --no-bundle`. No source changes were needed in M8.

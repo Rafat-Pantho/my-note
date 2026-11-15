@@ -980,28 +980,7 @@ pub fn ai_delete_preset(app: AppHandle, id: String) -> Result<AiView, String> {
 /// never starts Ollama or installs anything.
 #[tauri::command]
 pub fn open_ollama_site() -> Result<(), String> {
-    const URL: &str = "https://ollama.com";
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut c = std::process::Command::new("rundll32");
-        c.args(["url.dll,FileProtocolHandler", URL]);
-        c
-    };
-    #[cfg(target_os = "macos")]
-    let mut cmd = {
-        let mut c = std::process::Command::new("open");
-        c.arg(URL);
-        c
-    };
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut cmd = {
-        let mut c = std::process::Command::new("xdg-open");
-        c.arg(URL);
-        c
-    };
-    cmd.spawn()
-        .map(|_| ())
-        .map_err(|e| format!("Could not open the browser: {e}"))
+    crate::files::open_url("https://ollama.com")
 }
 
 #[cfg(test)]

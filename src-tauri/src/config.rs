@@ -8,7 +8,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     sync::{
-        Mutex,
+        Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
@@ -16,7 +16,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    AppHandle, Manager,
+    AppHandle, Manager, State,
     ipc::{InvokeBody, Request, Response},
 };
 
@@ -51,6 +51,9 @@ fn session_deferred(len: Option<u64>, full: bool) -> bool {
 /// Empty body when there is no saved session.
 #[tauri::command]
 pub async fn load_session(app: AppHandle, full: bool) -> Result<Response, String> {
+    if is_secondary() {
+        return Ok(Response::new(Vec::new())); // an extra window starts empty
+    }
     let path = data_file(&app, "session.json")?;
     if session_deferred(fs::metadata(&path).ok().map(|m| m.len()), full) {
         return Ok(Response::new(vec![SESSION_LARGE]));
@@ -60,10 +63,27 @@ pub async fn load_session(app: AppHandle, full: bool) -> Result<Response, String
 
 #[tauri::command]
 pub async fn save_session(app: AppHandle, request: Request<'_>) -> Result<(), String> {
+    if is_secondary() {
+        return Ok(()); // only the first window owns the session file
+    }
     let InvokeBody::Raw(body) = request.body() else {
         return Err("expected a raw body".into());
     };
     write_atomic(&data_file(&app, "session.json")?, body)
+}
+
+/// Flag given to an extra window started from the first one (File > New window, Move to new window).
+pub const NEW_WINDOW_FLAG: &str = "--new-window";
+
+fn has_flag(args: impl Iterator<Item = std::ffi::OsString>, flag: &str) -> bool {
+    args.skip(1).any(|a| a == flag)
+}
+
+/// An extra window has no session of its own (the first window owns `session.json`) and does not remember
+/// the window size.
+pub fn is_secondary() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| has_flag(std::env::args_os(), NEW_WINDOW_FLAG))
 }
 
 /* ---------- settings ---------- */
@@ -113,6 +133,20 @@ pub struct Settings {
     pub opacity: f64,
     /// Master switch: forces solid and turns off non-essential animation.
     pub reduce_effects: bool,
+    /// Open files from File > Open and Recent in a new window instead of a new tab.
+    pub open_in_new_window: bool,
+    /// Web search engine for Ctrl+E: "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL
+    /// template containing `%s`.
+    pub search_engine: String,
+    /// Show the whole status bar (when off only the AI indicator stays: it must always be visible).
+    pub status_bar: bool,
+    /// Last opened files, newest first. Paths only, never contents. Changed only through the `recent_*`
+    /// commands; saved in the file but not part of the settings payload or the generic patch.
+    #[serde(skip)]
+    pub recent_files: Vec<String>,
+    /// Size and position of the first window at the last exit. Same handling as `recent_files`.
+    #[serde(skip)]
+    pub window: Option<WindowGeom>,
     /// AI environments and consent. Not part of the generic settings patch and not sent with the settings
     /// (the frontend gets `ai::AiStatus` / `ai::AiView` instead): it is written to the file by
     /// `to_file_bytes` and changed only through the `ai_*` commands.
@@ -134,6 +168,11 @@ impl Default for Settings {
             effects: Mode::Off,
             opacity: DEFAULT_OPACITY,
             reduce_effects: false,
+            open_in_new_window: false,
+            search_engine: String::new(),
+            status_bar: true,
+            recent_files: Vec::new(),
+            window: None,
             ai: AiConfig::default(),
         }
     }
@@ -212,12 +251,28 @@ impl Settings {
         if let Some(r) = get("reduceEffects").and_then(|x| x.as_bool()) {
             self.reduce_effects = r;
         }
+        if let Some(b) = get("openInNewWindow").and_then(|x| x.as_bool()) {
+            self.open_in_new_window = b;
+        }
+        if let Some(e) = get("searchEngine")
+            .and_then(|x| x.as_str())
+            .and_then(sanitize_search_engine)
+        {
+            self.search_engine = e;
+        }
+        if let Some(b) = get("statusBar").and_then(|x| x.as_bool()) {
+            self.status_bar = b;
+        }
     }
 
     /// The on-disk form: the settings plus the format version.
     pub fn to_file_bytes(&self) -> Result<Vec<u8>, String> {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
         v["ai"] = serde_json::to_value(&self.ai).map_err(|e| e.to_string())?;
+        v["recentFiles"] = serde_json::to_value(&self.recent_files).map_err(|e| e.to_string())?;
+        if let Some(w) = &self.window {
+            v["window"] = serde_json::to_value(w).map_err(|e| e.to_string())?;
+        }
         v["version"] = CONFIG_VERSION.into();
         serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
     }
@@ -279,6 +334,8 @@ fn settings_from(mut v: serde_json::Value, from: u32) -> (Settings, Loaded) {
     let mut s = Settings::default();
     s.merge_json(&v);
     s.ai = AiConfig::from_value(v.get("ai")); // only the file can carry this, never a patch
+    s.recent_files = parse_recent(v.get("recentFiles"));
+    s.window = v.get("window").and_then(WindowGeom::from_value);
     let loaded = if from < CONFIG_VERSION {
         Loaded::Migrated { from }
     } else {
@@ -313,6 +370,160 @@ pub fn load_from(path: &Path, legacy: Option<&Path>) -> (Settings, Loaded) {
             .unwrap_or((Settings::default(), Loaded::Fresh)),
         // Unreadable for another reason (permissions...): run with defaults, leave the file alone.
         Err(_) => (Settings::default(), Loaded::Fresh),
+    }
+}
+
+/* ---------- recent files ---------- */
+
+pub const MAX_RECENT: usize = 20;
+const MAX_PATH_LEN: usize = 4096;
+
+fn same_path(a: &str, b: &str) -> bool {
+    if cfg!(windows) {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
+}
+
+fn valid_path(p: &str) -> bool {
+    !p.is_empty() && p.len() <= MAX_PATH_LEN && !p.chars().any(char::is_control)
+}
+
+/// Moves `path` to the front (no duplicates), keeping at most `MAX_RECENT`.
+pub fn push_recent(list: &mut Vec<String>, path: &str) {
+    if !valid_path(path) {
+        return;
+    }
+    list.retain(|p| !same_path(p, path));
+    list.insert(0, path.to_string());
+    list.truncate(MAX_RECENT);
+}
+
+/// A hand-edited or damaged list never breaks startup: bad entries and duplicates are dropped.
+pub fn parse_recent(v: Option<&serde_json::Value>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in v.and_then(|x| x.as_array()).into_iter().flatten() {
+        let Some(p) = p.as_str().filter(|p| valid_path(p)) else {
+            continue;
+        };
+        if !out.iter().any(|q| same_path(q, p)) && out.len() < MAX_RECENT {
+            out.push(p.to_string());
+        }
+    }
+    out
+}
+
+/// The entries that still exist, in order. `exists` is injected so the rule is testable.
+pub fn existing_recent(list: &[String], exists: impl Fn(&str) -> bool) -> Vec<String> {
+    list.iter().filter(|p| exists(p)).cloned().collect()
+}
+
+/// For File > Recent: only files that still exist (a missing one is skipped, not forgotten, so an unplugged
+/// drive does not wipe the list).
+#[tauri::command]
+pub async fn recent_list(settings: State<'_, SettingsState>) -> Result<Vec<String>, String> {
+    let list = settings.get().recent_files;
+    Ok(existing_recent(&list, |p| Path::new(p).is_file()))
+}
+
+#[tauri::command]
+pub fn recent_add(app: AppHandle, path: String, settings: State<SettingsState>) {
+    settings.with_mut(|s| push_recent(&mut s.recent_files, &path));
+    schedule_save(&app);
+}
+
+#[tauri::command]
+pub fn recent_clear(app: AppHandle, settings: State<SettingsState>) {
+    settings.with_mut(|s| s.recent_files.clear());
+    schedule_save(&app);
+}
+
+/* ---------- web search engine ---------- */
+
+const MAX_ENGINE_LEN: usize = 500;
+const MAX_SEARCH_CHARS: usize = 1000;
+
+fn engine_template(id: &str) -> Option<&'static str> {
+    match id {
+        "bing" => Some("https://www.bing.com/search?q=%s"),
+        "google" => Some("https://www.google.com/search?q=%s"),
+        "duckduckgo" => Some("https://duckduckgo.com/?q=%s"),
+        _ => None,
+    }
+}
+
+/// "" and the three built-in ids are fine; anything else must be an http(s) URL containing `%s`.
+/// None means invalid (keep the old value).
+fn sanitize_search_engine(s: &str) -> Option<String> {
+    let t = s.trim();
+    if t.is_empty() || engine_template(t).is_some() {
+        return Some(t.to_string());
+    }
+    let bad = |c: char| c.is_control() || c.is_whitespace() || matches!(c, '"' | '<' | '>');
+    let scheme = t.starts_with("https://") || t.starts_with("http://");
+    (scheme && t.contains("%s") && t.chars().count() <= MAX_ENGINE_LEN && !t.chars().any(bad))
+        .then(|| t.to_string())
+}
+
+fn percent_encode(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() * 3);
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// The address to open for `query` with `engine`; None if no engine is chosen or the query is blank.
+pub fn search_url(engine: &str, query: &str) -> Option<String> {
+    let template = engine_template(engine).unwrap_or(engine);
+    let template = sanitize_search_engine(template).filter(|t| !t.is_empty())?;
+    let query: String = query.trim().chars().take(MAX_SEARCH_CHARS).collect();
+    (!query.is_empty()).then(|| template.replace("%s", &percent_encode(&query)))
+}
+
+/* ---------- window size and position ---------- */
+
+/// Outer position and inner size in physical pixels, as of the last exit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowGeom {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub maximized: bool,
+}
+
+const MIN_WINDOW: u32 = 300;
+const MAX_WINDOW: u32 = 20_000;
+
+impl WindowGeom {
+    pub fn from_value(v: &serde_json::Value) -> Option<Self> {
+        let g: WindowGeom = serde_json::from_value(v.clone()).ok()?;
+        g.sane().then_some(g)
+    }
+
+    fn sane(&self) -> bool {
+        (MIN_WINDOW..=MAX_WINDOW).contains(&self.width)
+            && (MIN_WINDOW..=MAX_WINDOW).contains(&self.height)
+            && self.x.abs() <= 32_000
+            && self.y.abs() <= 32_000
+    }
+
+    /// Visible enough to grab: the top strip (title bar) overlaps a monitor by at least 100 x 30 pixels, so a
+    /// window saved on a monitor that is gone never opens off screen. `monitors` are (x, y, width, height).
+    pub fn is_reachable(&self, monitors: &[(i32, i32, u32, u32)]) -> bool {
+        monitors.iter().any(|&(mx, my, mw, mh)| {
+            let left = self.x.max(mx);
+            let right = (self.x + self.width as i32).min(mx + mw as i32);
+            let top = self.y.max(my);
+            let bottom = (self.y + 40).min(my + mh as i32);
+            right - left >= 100 && bottom - top >= 30
+        })
     }
 }
 
@@ -674,6 +885,207 @@ mod tests {
                 "consentOrigin": "http://localhost:11434" }] }
         }));
         assert_eq!(t.ai, AiConfig::default());
+    }
+
+    fn strings(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn recent_list_is_newest_first_without_duplicates() {
+        let mut l = Vec::new();
+        push_recent(&mut l, "/a.txt");
+        push_recent(&mut l, "/b.txt");
+        push_recent(&mut l, "/c.txt");
+        push_recent(&mut l, "/a.txt"); // reopened: moves to the front, no second entry
+        assert_eq!(l, strings(&["/a.txt", "/c.txt", "/b.txt"]));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn recent_paths_ignore_case_on_windows() {
+        let mut l = strings(&["C:\\Notes\\A.txt"]);
+        push_recent(&mut l, "c:\\notes\\a.TXT");
+        assert_eq!(l, strings(&["c:\\notes\\a.TXT"]));
+    }
+
+    #[test]
+    fn recent_list_keeps_twenty_and_drops_the_oldest() {
+        let mut l = Vec::new();
+        for i in 0..25 {
+            push_recent(&mut l, &format!("/f{i}.txt"));
+        }
+        assert_eq!(l.len(), MAX_RECENT);
+        assert_eq!(l[0], "/f24.txt");
+        assert_eq!(l[MAX_RECENT - 1], "/f5.txt");
+    }
+
+    #[test]
+    fn recent_list_rejects_bad_paths() {
+        let mut l = Vec::new();
+        push_recent(&mut l, "");
+        push_recent(&mut l, "a\nb");
+        push_recent(&mut l, &"x".repeat(MAX_PATH_LEN + 1));
+        assert!(l.is_empty());
+    }
+
+    #[test]
+    fn recent_list_loaded_from_a_damaged_file_is_cleaned() {
+        let v = serde_json::json!(["/a", 5, null, "/b", "/a", "", "/c\u{0}"]);
+        assert_eq!(parse_recent(Some(&v)), strings(&["/a", "/b"]));
+        assert!(parse_recent(Some(&serde_json::json!("nope"))).is_empty());
+        assert!(parse_recent(None).is_empty());
+        let many: Vec<String> = (0..40).map(|i| format!("/f{i}")).collect();
+        assert_eq!(
+            parse_recent(Some(&serde_json::json!(many))).len(),
+            MAX_RECENT
+        );
+    }
+
+    #[test]
+    fn missing_files_are_skipped_but_kept_in_order() {
+        let l = strings(&["/a", "/gone", "/b"]);
+        assert_eq!(
+            existing_recent(&l, |p| p != "/gone"),
+            strings(&["/a", "/b"])
+        );
+        assert_eq!(l.len(), 3); // the stored list is not touched
+    }
+
+    #[test]
+    fn recent_list_and_window_survive_a_save_but_not_a_patch() {
+        let d = Scratch::new("recent-roundtrip");
+        let mut s = Settings::default();
+        push_recent(&mut s.recent_files, "/a.txt");
+        s.window = Some(WindowGeom {
+            x: 10,
+            y: 20,
+            width: 900,
+            height: 650,
+            maximized: true,
+        });
+        assert!(
+            serde_json::to_value(&s)
+                .unwrap()
+                .get("recentFiles")
+                .is_none()
+        );
+        let path = d.path(CONFIG_FILE);
+        write_settings(&path, &s).unwrap();
+        let (back, _) = load_from(&path, None);
+        assert_eq!(back, s);
+        let mut t = Settings::default();
+        t.merge_json(&serde_json::json!({
+            "recentFiles": ["/evil"], "window": { "x": 0, "y": 0, "width": 500, "height": 500, "maximized": false }
+        }));
+        assert!(t.recent_files.is_empty() && t.window.is_none());
+    }
+
+    #[test]
+    fn new_settings_are_validated() {
+        let mut s = Settings::default();
+        assert!(s.status_bar && !s.open_in_new_window && s.search_engine.is_empty());
+        s.merge_json(&serde_json::json!({
+            "statusBar": false, "openInNewWindow": true, "searchEngine": "google"
+        }));
+        assert!(!s.status_bar && s.open_in_new_window);
+        assert_eq!(s.search_engine, "google");
+        s.merge_json(&serde_json::json!({ "searchEngine": "javascript:alert(%s)" }));
+        s.merge_json(&serde_json::json!({ "searchEngine": "https://x.test/?q=" })); // no %s
+        s.merge_json(&serde_json::json!({ "searchEngine": "https://x.test/ ?q=%s" })); // space
+        assert_eq!(s.search_engine, "google"); // all rejected
+        s.merge_json(&serde_json::json!({ "searchEngine": "https://x.test/find?q=%s" }));
+        assert_eq!(s.search_engine, "https://x.test/find?q=%s");
+        s.merge_json(&serde_json::json!({ "searchEngine": "" })); // "ask again"
+        assert_eq!(s.search_engine, "");
+    }
+
+    #[test]
+    fn search_urls_are_built_and_encoded() {
+        assert_eq!(
+            search_url("bing", "rust & cargo").as_deref(),
+            Some("https://www.bing.com/search?q=rust%20%26%20cargo")
+        );
+        assert_eq!(
+            search_url("duckduckgo", "a+b=c").as_deref(),
+            Some("https://duckduckgo.com/?q=a%2Bb%3Dc")
+        );
+        assert_eq!(
+            search_url("google", "বাংলা").as_deref(),
+            Some("https://www.google.com/search?q=%E0%A6%AC%E0%A6%BE%E0%A6%82%E0%A6%B2%E0%A6%BE")
+        );
+        assert_eq!(
+            search_url("https://x.test/s/%s/go", " hi ").as_deref(),
+            Some("https://x.test/s/hi/go")
+        );
+        // A query containing "%s" is encoded, not substituted again.
+        assert_eq!(
+            search_url("https://x.test/?q=%s", "100%s").as_deref(),
+            Some("https://x.test/?q=100%25s")
+        );
+        assert_eq!(search_url("", "hi"), None); // no engine chosen
+        assert_eq!(search_url("nope", "hi"), None);
+        assert_eq!(search_url("bing", "   "), None);
+        let long = "a".repeat(5000);
+        assert_eq!(
+            search_url("bing", &long).unwrap().len(),
+            "https://www.bing.com/search?q=".len() + MAX_SEARCH_CHARS
+        );
+    }
+
+    #[test]
+    fn window_geometry_is_checked_against_the_monitors() {
+        let screen = [(0, 0, 1920, 1080)];
+        let g = |x, y| WindowGeom {
+            x,
+            y,
+            width: 900,
+            height: 650,
+            maximized: false,
+        };
+        assert!(g(100, 100).is_reachable(&screen));
+        assert!(g(1800, 100).is_reachable(&screen)); // 120 px still visible
+        assert!(!g(1850, 100).is_reachable(&screen)); // only 70 px
+        assert!(!g(100, 1070).is_reachable(&screen)); // title bar below the screen
+        assert!(!g(-5000, 0).is_reachable(&screen)); // monitor unplugged
+        assert!(g(-1000, 100).is_reachable(&[(-1920, 0, 1920, 1080), (0, 0, 1920, 1080)]));
+        assert!(!g(100, 100).is_reachable(&[]));
+        assert!(
+            WindowGeom::from_value(
+                &serde_json::json!({"x":0,"y":0,"width":900,"height":650,"maximized":false})
+            )
+            .is_some()
+        );
+        assert!(
+            WindowGeom::from_value(
+                &serde_json::json!({"x":0,"y":0,"width":10,"height":650,"maximized":false})
+            )
+            .is_none()
+        );
+        assert!(
+            WindowGeom::from_value(
+                &serde_json::json!({"x":-32001,"y":0,"width":900,"height":650,"maximized":false})
+            )
+            .is_none()
+        );
+        assert!(WindowGeom::from_value(&serde_json::json!("x")).is_none());
+    }
+
+    #[test]
+    fn new_window_flag_is_found_after_the_program_name() {
+        let args = |v: &[&str]| v.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+        assert!(has_flag(
+            args(&["app", NEW_WINDOW_FLAG, "a.txt"]).into_iter(),
+            NEW_WINDOW_FLAG
+        ));
+        assert!(!has_flag(
+            args(&[NEW_WINDOW_FLAG]).into_iter(),
+            NEW_WINDOW_FLAG
+        )); // argv[0] is the program
+        assert!(!has_flag(
+            args(&["app", "a.txt"]).into_iter(),
+            NEW_WINDOW_FLAG
+        ));
     }
 
     #[test]

@@ -335,9 +335,127 @@ pub async fn pick_save_path(app: AppHandle, default_name: String) -> Option<Stri
         .and_then(path_string)
 }
 
+/* ---------- things that start another program, each only on a user action ---------- */
+
+/// Opens an http(s) address in the default browser. Nothing else is accepted (no file:, javascript:...).
+pub fn open_url(url: &str) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only http and https addresses can be opened.".into());
+    }
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = std::process::Command::new("rundll32");
+        c.args(["url.dll,FileProtocolHandler", url]);
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(url);
+        c
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(url);
+        c
+    };
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Could not open the browser: {e}"))
+}
+
+/// Ctrl+E / Edit > Search web: opens the chosen engine with `query`. Fails with "no-engine" until the user
+/// has picked one (the frontend then asks). Runs only on that explicit action.
+#[tauri::command]
+pub fn search_web(
+    query: String,
+    settings: tauri::State<crate::config::SettingsState>,
+) -> Result<(), String> {
+    let engine = settings.get().search_engine;
+    if engine.is_empty() {
+        return Err("no-engine".into());
+    }
+    let url = crate::config::search_url(&engine, &query).ok_or("Nothing to search for.")?;
+    open_url(&url)
+}
+
+/// `/select,"<path>"` for Explorer (it wants backslashes and the quotes inside the one argument).
+fn explorer_select_arg(path: &str) -> String {
+    format!("/select,\"{}\"", path.replace('/', "\\"))
+}
+
+/// Shows the file in Explorer / Finder / the file manager.
+#[tauri::command]
+pub fn show_in_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err("The file no longer exists.".into());
+    }
+    #[cfg(windows)]
+    let mut cmd = {
+        use std::os::windows::process::CommandExt;
+        let mut c = std::process::Command::new("explorer.exe");
+        c.raw_arg(explorer_select_arg(&path));
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.args(["-R", &path]);
+        c
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(p.parent().unwrap_or(p));
+        c
+    };
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Could not open the file manager: {e}"))
+}
+
+/// Starts another My Note window (a new process: no shared state, like starting the app again) that opens
+/// `paths`. It starts with no session of its own (`--new-window`).
+#[tauri::command]
+pub fn new_window(paths: Vec<String>) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg(crate::config::NEW_WINDOW_FLAG);
+    if std::env::args_os().any(|a| a == "--no-effects") {
+        cmd.arg("--no-effects");
+    }
+    cmd.args(paths.iter().take(50).filter(|p| !p.starts_with('-')));
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Could not start a new window: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explorer_argument_is_one_quoted_select() {
+        assert_eq!(
+            explorer_select_arg("C:/My Notes/a b.txt"),
+            "/select,\"C:\\My Notes\\a b.txt\""
+        );
+    }
+
+    #[test]
+    fn only_web_addresses_can_be_opened() {
+        for bad in [
+            "file:///C:/x",
+            "javascript:alert(1)",
+            "calc.exe",
+            "ftp://x",
+            "",
+        ] {
+            assert!(open_url(bad).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn detects_utf8_variants() {

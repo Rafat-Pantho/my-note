@@ -19,6 +19,8 @@ export interface TabBarHandlers {
   select(tab: Tab): void;
   close(tab: Tab): void;
   reorder(ids: number[]): void;
+  /** Right-click on a tab, at screen position (x, y). */
+  context(tab: Tab, x: number, y: number): void;
 }
 
 const DRAG_THRESHOLD = 5;
@@ -66,6 +68,10 @@ export class TabBar {
     });
     el.addEventListener("auxclick", (e) => {
       if (e.button === 1) this.handlers.close(tab);
+    });
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      this.handlers.context(tab, e.clientX, e.clientY);
     });
     this.enableDrag(el);
     return el;

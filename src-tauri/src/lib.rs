@@ -6,16 +6,135 @@ mod files;
 mod keychain;
 mod timing;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, WindowEvent};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent,
+};
 
-use config::{Settings, SettingsState};
+use config::{Settings, SettingsState, WindowGeom};
 use effects::{EffectsState, Mode, Status};
 
 /// Until the frontend is up, window close is not intercepted (nothing to protect yet).
 static FRONTEND_READY: AtomicBool = AtomicBool::new(false);
+
+/// The window's normal (not maximized, not minimized) position and size, kept up to date by window events
+/// with no I/O, and written to the config once, at exit.
+#[derive(Default)]
+struct WindowTrack(Mutex<Seen>);
+
+#[derive(Default)]
+struct Seen {
+    pos: Option<PhysicalPosition<i32>>,
+    size: Option<PhysicalSize<u32>>,
+}
+
+impl WindowTrack {
+    fn follow(&self, window: &tauri::Window, event: &WindowEvent) {
+        if window.is_maximized().unwrap_or(true) || window.is_minimized().unwrap_or(true) {
+            return;
+        }
+        // Maximizing sends a Moved (to the screen corner) before the window reports itself maximized, so a
+        // window that already fills the work area is not a "normal" rectangle either.
+        if let (Ok(Some(m)), Ok(o)) = (window.current_monitor(), window.outer_size()) {
+            let area = m.work_area().size;
+            if o.width + 16 >= area.width && o.height + 16 >= area.height {
+                return;
+            }
+        }
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        match event {
+            WindowEvent::Moved(p) if p.x > -30_000 && p.y > -30_000 => g.pos = Some(*p),
+            WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => g.size = Some(*s),
+            _ => {}
+        }
+    }
+
+    fn geom(&self, maximized: bool) -> Option<WindowGeom> {
+        let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let (p, s) = (g.pos?, g.size?);
+        Some(WindowGeom {
+            x: p.x,
+            y: p.y,
+            width: s.width,
+            height: s.height,
+            maximized,
+        })
+    }
+}
+
+/// Puts the window where it was at the last exit, if that spot is still on a monitor. An extra window gets
+/// the same size, shifted a little so it does not hide the first one. Runs before the window is shown.
+fn restore_window(window: &WebviewWindow, saved: Option<WindowGeom>) {
+    let Some(mut g) = saved else { return };
+    let monitors: Vec<(i32, i32, u32, u32)> = window
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| {
+            (
+                m.position().x,
+                m.position().y,
+                m.size().width,
+                m.size().height,
+            )
+        })
+        .collect();
+    if config::is_secondary() {
+        g.x += 32;
+        g.y += 32;
+        g.maximized = false;
+    }
+    if !g.is_reachable(&monitors) {
+        return;
+    }
+    let _ = window.set_size(PhysicalSize::new(g.width, g.height));
+    let _ = window.set_position(PhysicalPosition::new(g.x, g.y));
+    if g.maximized {
+        let _ = window.maximize();
+    }
+}
+
+/// Saves the first window's geometry into the settings (an extra window never does).
+fn remember_window(app: &AppHandle) {
+    if config::is_secondary() {
+        return;
+    }
+    let (Some(window), Some(track), Some(settings)) = (
+        app.get_webview_window("main"),
+        app.try_state::<WindowTrack>(),
+        app.try_state::<SettingsState>(),
+    ) else {
+        return;
+    };
+    let maximized = window.is_maximized().unwrap_or(false);
+    let minimized = window.is_minimized().unwrap_or(false);
+    let live = match (window.outer_position(), window.inner_size()) {
+        (Ok(p), Ok(s)) if !maximized && !minimized => Some(WindowGeom {
+            x: p.x,
+            y: p.y,
+            width: s.width,
+            height: s.height,
+            maximized: false,
+        }),
+        _ => None,
+    };
+    // Normal window: read it now. Maximized or minimized: the last normal rectangle the events saw, or (if
+    // the app started maximized and never left it) the one already saved.
+    if let Some(g) = live.or_else(|| track.geom(maximized)) {
+        settings.with_mut(|s| s.window = Some(g));
+    } else if maximized {
+        settings.with_mut(|s| {
+            if let Some(w) = &mut s.window {
+                w.maximized = true;
+            }
+        });
+    }
+}
 
 /// `marks` is only a timing breakdown from the page (ms since navigation start); it is printed with
 /// MYNOTE_TIMING=1 and ignored otherwise.
@@ -42,6 +161,7 @@ fn set_title(window: WebviewWindow, title: String) {
 
 #[tauri::command]
 fn exit_app(app: AppHandle) {
+    remember_window(&app);
     config::flush(&app); // pending debounced settings
     app.exit(0);
 }
@@ -140,7 +260,9 @@ pub fn run() {
             app.manage(SettingsState::new(settings.clone()));
             app.manage(EffectsState::new(no_effects));
             app.manage(ai::AiState::default()); // an empty map: no I/O, no network
+            app.manage(WindowTrack::default());
             if let Some(window) = app.get_webview_window("main") {
+                restore_window(&window, settings.window);
                 let fx = app.state::<EffectsState>();
                 let status = effects::apply(&window, &settings, &fx);
                 fx.record(&status);
@@ -163,6 +285,11 @@ pub fn run() {
             WindowEvent::Focused(true) | WindowEvent::ThemeChanged(_) => {
                 refresh_appearance(window.app_handle());
             }
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                if let Some(track) = window.try_state::<WindowTrack>() {
+                    track.follow(window, event);
+                }
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
@@ -175,6 +302,12 @@ pub fn run() {
             files::write_file,
             files::pick_open_files,
             files::pick_save_path,
+            files::search_web,
+            files::show_in_folder,
+            files::new_window,
+            config::recent_list,
+            config::recent_add,
+            config::recent_clear,
             config::load_session,
             config::save_session,
             get_settings,

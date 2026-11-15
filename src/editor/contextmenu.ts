@@ -1,6 +1,6 @@
 /** Right-click menu for the editor: the usual Notepad items plus whatever extra entries the app adds (AI).
  *  The webview's own menu cannot be extended, so this replaces it inside the text area. */
-import { selectAll, undo, undoDepth } from "@codemirror/commands";
+import { redo, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "@codemirror/view";
 
@@ -14,44 +14,63 @@ export interface ContextItem {
   sep?: boolean;
 }
 
-/** Cut / Copy / Paste / Delete / Select all for `view`, in Notepad's order. `flash` shows a short message. */
-export function editorItems(view: EditorView, flash: (text: string) => void): ContextItem[] {
-  const hasSel = !view.state.selection.ranges.every((r) => r.empty);
-  const doc = (command: "cut" | "copy") => () => {
+export const hasSelection = (view: EditorView) => !view.state.selection.ranges.every((r) => r.empty);
+
+/** The Edit commands shared by the right-click menu and the Edit menu. `flash` shows a short message. */
+export function editorCommands(view: EditorView, flash: (text: string) => void) {
+  const clip = (command: "cut" | "copy") => () => {
     view.focus();
     document.execCommand(command); // CodeMirror handles the cut/copy event itself
   };
+  return {
+    undo: () => { undo(view); view.focus(); },
+    redo: () => { redo(view); view.focus(); },
+    cut: clip("cut"),
+    copy: clip("copy"),
+    paste: () => {
+      view.focus();
+      // The webview cannot read the clipboard without a permission prompt that never resolves, so Rust does.
+      invoke<string>("clipboard_read").then(
+        (text) => {
+          if (text) view.dispatch({ ...view.state.replaceSelection(text), scrollIntoView: true, userEvent: "input.paste" });
+          else flash("The clipboard has no text.");
+        },
+        (e) => flash(String(e) === "unsupported" ? "Press Ctrl+V to paste." : String(e)),
+      );
+    },
+    del: () => {
+      view.dispatch({ ...view.state.replaceSelection(""), userEvent: "delete.selection" });
+      view.focus();
+    },
+    selectAll: () => { selectAll(view); view.focus(); },
+  };
+}
+
+/** Puts plain text on the clipboard (a click is the user action it needs). False if the webview refused. */
+export function copyText(text: string): boolean {
+  const box = document.createElement("textarea");
+  box.value = text;
+  box.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+  document.body.append(box);
+  box.select();
+  const ok = document.execCommand("copy");
+  box.remove();
+  return ok;
+}
+
+/** Cut / Copy / Paste / Delete / Select all for `view`, in Notepad's order. */
+export function editorItems(view: EditorView, flash: (text: string) => void): ContextItem[] {
+  const hasSel = hasSelection(view);
+  const c = editorCommands(view, flash);
   return [
-    { label: "Undo", hint: "Ctrl+Z", disabled: undoDepth(view.state) === 0, run: () => { undo(view); view.focus(); } },
+    { label: "Undo", hint: "Ctrl+Z", disabled: undoDepth(view.state) === 0, run: c.undo },
     { label: "", sep: true },
-    { label: "Cut", hint: "Ctrl+X", disabled: !hasSel, run: doc("cut") },
-    { label: "Copy", hint: "Ctrl+C", disabled: !hasSel, run: doc("copy") },
-    {
-      label: "Paste",
-      hint: "Ctrl+V",
-      run: () => {
-        view.focus();
-        // The webview cannot read the clipboard without a permission prompt that never resolves, so Rust does.
-        invoke<string>("clipboard_read").then(
-          (text) => {
-            if (text) view.dispatch({ ...view.state.replaceSelection(text), scrollIntoView: true, userEvent: "input.paste" });
-            else flash("The clipboard has no text.");
-          },
-          (e) => flash(String(e) === "unsupported" ? "Press Ctrl+V to paste." : String(e)),
-        );
-      },
-    },
-    {
-      label: "Delete",
-      hint: "Del",
-      disabled: !hasSel,
-      run: () => {
-        view.dispatch({ ...view.state.replaceSelection(""), userEvent: "delete.selection" });
-        view.focus();
-      },
-    },
+    { label: "Cut", hint: "Ctrl+X", disabled: !hasSel, run: c.cut },
+    { label: "Copy", hint: "Ctrl+C", disabled: !hasSel, run: c.copy },
+    { label: "Paste", hint: "Ctrl+V", run: c.paste },
+    { label: "Delete", hint: "Del", disabled: !hasSel, run: c.del },
     { label: "", sep: true },
-    { label: "Select all", hint: "Ctrl+A", run: () => { selectAll(view); view.focus(); } },
+    { label: "Select all", hint: "Ctrl+A", run: c.selectAll },
   ];
 }
 

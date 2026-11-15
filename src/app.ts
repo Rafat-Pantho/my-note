@@ -1,14 +1,17 @@
 import { listen } from "@tauri-apps/api/event";
+import { redoDepth, undoDepth } from "@codemirror/commands";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { applyZoom, createEditor, makeState, setFont, setPrefs, setUpdateHandler, withPrefs } from "./editor/editor";
 import type { AiController } from "./ai/controller";
-import { editorItems, showContextMenu } from "./editor/contextmenu";
+import { copyText, editorCommands, editorItems, hasSelection, showContextMenu } from "./editor/contextmenu";
 import { modal } from "./editor/dialog";
 import { createStatusBar } from "./editor/statusbar";
 import {
-  decodeSession, editorReady, exitApp, isSessionLarge, loadSessionBytes, pickOpenFiles, pickSavePath, readFile, saveSession,
-  setTitle, showWindow, takeLaunchArgs, writeFile,
+  decodeSession, editorReady, exitApp, isSessionLarge, loadSessionBytes, newWindow, pickOpenFiles, pickSavePath,
+  readFile, recentAdd, recentClear, recentList, saveSession, searchWeb, setTitle, showInFolder, showWindow,
+  takeLaunchArgs, writeFile,
 } from "./tabs/ipc";
+import { ClosedTabs, closedEntry } from "./tabs/closed";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
 import type { SettingsPanel } from "./settings/panel";
 import { type Tab, TabBar } from "./tabs/tabs";
@@ -46,7 +49,9 @@ const bar = new TabBar(document.getElementById("tabs")!, {
     tabs = ids.map((id) => tabs.find((t) => t.id === id)!);
     scheduleSession();
   },
+  context: (t, x, y) => showTabMenu(t, x, y),
 });
+const closed = new ClosedTabs();
 const status = createStatusBar(document.getElementById("statusbar")!, {
   toggleWrap,
   resetZoom: () => setZoom(100),
@@ -186,6 +191,9 @@ function newTab() {
 async function closeTab(tab: Tab): Promise<boolean> {
   if (tab.dirty && !(await resolveUnsaved(tab))) return false;
   const i = tabs.indexOf(tab);
+  if (i < 0) return true; // already gone (closed twice in a row)
+  const entry = closedEntry(tab, tab.path ? undefined : tab.state?.doc.toString());
+  if (entry) closed.push(entry);
   tabs.splice(i, 1);
   if (tab === settingsTab) {
     settingsPanel?.dispose();
@@ -269,6 +277,7 @@ async function openPaths(paths: string[]) {
     }
     const tab = await readIntoTab(p);
     if (!tab) continue;
+    void recentAdd(p).catch(() => {});
     if (tabs.length === 1 && isBlank(tabs[0])) tabs = [];
     tabs.push(tab);
     last = tab;
@@ -276,9 +285,173 @@ async function openPaths(paths: string[]) {
   if (last) await activate(last);
 }
 
+/** File > Open and Recent: a new tab, or a new window when that setting is on (an empty window just takes it). */
+async function openFiles(paths: string[]) {
+  if (!paths.length) return;
+  if (appearance()?.settings.openInNewWindow && !(tabs.length === 1 && isBlank(tabs[0]))) {
+    for (const p of paths) void recentAdd(p).catch(() => {});
+    try {
+      await newWindow(paths);
+      return;
+    } catch (e) {
+      flash(String(e)); // could not start one: open it here instead
+    }
+  }
+  await openPaths(paths);
+}
+
 async function openDialog() {
-  const paths = await pickOpenFiles();
-  if (paths.length) await openPaths(paths);
+  await openFiles(await pickOpenFiles());
+}
+
+async function saveAll() {
+  for (const t of tabs.filter((x) => x.dirty && x.kind !== "settings")) {
+    if (!(await saveTab(t, false))) return; // cancelled or failed: stop here
+  }
+}
+
+/** Ctrl+Shift+T: the most recently closed tab (last 10). A file that is open again is skipped. */
+async function reopenClosed() {
+  const e = closed.pop((p) => tabs.some((t) => t.path && samePath(t.path, p)));
+  if (!e) return flash("No closed tab to reopen.");
+  if (e.path) return openPaths([e.path]);
+  const t = makeTab({ text: e.text ?? "", encoding: e.encoding, lineEnding: e.lineEnding, name: e.name, dirty: true });
+  if (tabs.length === 1 && isBlank(tabs[0])) tabs = [];
+  tabs.push(t);
+  await activate(t);
+}
+
+/* ---------- tab context menu ---------- */
+
+/** Closes `list` one by one; stops if the user cancels a "save changes?" question. */
+async function closeMany(list: Tab[]) {
+  for (const t of list) if (!(await closeTab(t))) return;
+}
+
+/** "Move to new window": saves first if needed (asks), opens the file in a new window, closes the tab here. */
+async function moveToNewWindow(tab: Tab) {
+  if (tab.dirty || !tab.path) {
+    const r = await modal({
+      message: `${tab.name} must be saved to move it to a new window. Save it now?`,
+      buttons: ["Save", "Cancel"],
+    });
+    if (r.button !== "Save" || !(await saveTab(tab, false))) return;
+  }
+  try {
+    await newWindow([tab.path!]);
+  } catch (e) {
+    return flash(String(e));
+  }
+  await closeTab(tab);
+}
+
+function showTabMenu(tab: Tab, x: number, y: number) {
+  const i = tabs.indexOf(tab);
+  const path = tab.path;
+  const doc = tab.kind !== "settings";
+  showContextMenu(
+    x,
+    y,
+    [
+      { label: "Close", hint: "Ctrl+W", run: () => void closeTab(tab) },
+      {
+        label: "Close other tabs",
+        disabled: tabs.length < 2,
+        run: () => void activate(tab).then(() => closeMany(tabs.filter((t) => t !== tab))),
+      },
+      {
+        label: "Close tabs to the right",
+        disabled: i >= tabs.length - 1,
+        run: () => void closeMany(tabs.slice(i + 1)),
+      },
+      { label: "", sep: true },
+      {
+        label: "Copy file path",
+        disabled: !path,
+        run: () => flash(copyText(path!) ? "File path copied." : "Could not copy the file path."),
+      },
+      { label: "Show in file manager", disabled: !path, run: () => void showInFolder(path!).catch((e) => flash(String(e))) },
+      { label: "Move to new window", disabled: !doc, run: () => void moveToNewWindow(tab) },
+    ],
+    () => view.focus(),
+  );
+}
+
+/* ---------- menu bar ---------- */
+
+async function searchSelection() {
+  if (active.kind === "settings") return;
+  const r = view.state.selection.main;
+  const text = view.state.sliceDoc(r.from, Math.min(r.to, r.from + 2000)).replace(/\s+/g, " ").trim();
+  if (!text) return flash("Select some text to search for.");
+  try {
+    await searchWeb(text);
+  } catch (e) {
+    if (String(e) !== "no-engine") return flash(String(e));
+    const { chooseEngine } = await import("./editor/websearch"); // first use: ask which engine, once
+    const chosen = await chooseEngine();
+    view.focus();
+    if (chosen) await searchWeb(text).catch((err) => flash(String(err)));
+  }
+}
+
+async function findStep(dir: 1 | -1) {
+  (await import("./editor/find")).findStep(view, dir);
+}
+
+/** Builds File / Edit / View after the first paint (its code is a lazy chunk). */
+async function loadMenus() {
+  const { createMenuBar, menuDefs } = await import("./editor/menubar");
+  const edit = () => editorCommands(view, flash);
+  createMenuBar(
+    document.getElementById("menus")!,
+    menuDefs({
+      isDoc: () => active.kind !== "settings",
+      hasSelection: () => hasSelection(view),
+      canUndo: () => undoDepth(view.state) > 0,
+      canRedo: () => redoDepth(view.state) > 0,
+      wrap: () => prefs.wrap,
+      statusBar: () => appearance()?.settings.statusBar !== false,
+      recent: recentList,
+      newTab,
+      newWindow: () => void newWindow([]).catch((e) => flash(String(e))),
+      open: () => void openDialog(),
+      openRecent: (p) => void openFiles([p]),
+      clearRecent: () => void recentClear().catch(() => {}),
+      save: () => void saveTab(active, false),
+      saveAs: () => void saveTab(active, true),
+      saveAll: () => void saveAll(),
+      print,
+      closeTab: () => void closeTab(active),
+      closeWindow: () => void closeApp(),
+      undo: () => edit().undo(),
+      redo: () => edit().redo(),
+      cut: () => edit().cut(),
+      copy: () => edit().copy(),
+      paste: () => edit().paste(),
+      del: () => edit().del(),
+      find: () => void openFind(false),
+      findNext: () => void findStep(1),
+      findPrev: () => void findStep(-1),
+      replace: () => void openFind(true),
+      goto: () => void gotoLine(),
+      selectAll: () => edit().selectAll(),
+      dateTime: () => {
+        insertDateTime();
+        view.focus();
+      },
+      searchWeb: () => void searchSelection(),
+      zoomIn: () => setZoom(prefs.zoom + 10),
+      zoomOut: () => setZoom(prefs.zoom - 10),
+      zoomReset: () => setZoom(100),
+      toggleStatusBar: () => void setAppearance({ statusBar: appearance()?.settings.statusBar === false }),
+      toggleWrap: () => {
+        toggleWrap();
+        view.focus();
+      },
+    }),
+    () => (active.kind === "settings" ? undefined : view.focus()),
+  );
 }
 
 async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
@@ -295,6 +468,7 @@ async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
     await modal({ message: `Cannot save ${path}\n${String(e)}`, buttons: ["OK"] });
     return false;
   }
+  if (!tab.path || saveAs) void recentAdd(path).catch(() => {});
   tab.path = path;
   tab.name = basename(path);
   tab.dirty = false;
@@ -449,6 +623,7 @@ function toggleWrap() {
 /** Live-applies editor settings (wrap, tab size, font) to the view and every open tab. */
 function applySettings({ settings: s, ai }: Appearance) {
   status.setAi(ai);
+  document.getElementById("app")!.classList.toggle("no-status", !s.statusBar);
   if (s.wordWrap !== prefs.wrap || s.tabSize !== appliedTab) {
     prefs.wrap = s.wordWrap;
     appliedTab = s.tabSize;
@@ -514,17 +689,21 @@ function onKeyDown(e: KeyboardEvent) {
     fn();
   };
   if (e.key === "F5" && !ctrl) return inDoc ? run(insertDateTime) : undefined;
+  if (e.key === "F3" && !ctrl && !e.altKey) return inDoc ? run(() => void findStep(e.shiftKey ? -1 : 1)) : undefined;
   if (e.altKey && !ctrl && key === "z") return inDoc ? run(toggleWrap) : undefined;
   if (!ctrl || e.altKey) return;
   // Editing shortcuts do nothing on the Settings tab (and must not reach the webview's own handlers).
-  if (!inDoc && ["s", "f", "h", "g", "p", "i", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
+  if (!inDoc && ["s", "f", "h", "g", "p", "i", "e", "+", "=", "add", "-", "subtract", "0"].includes(key)) return run(() => {});
   switch (key) {
     case ",": return run(() => void openSettings());
     case "i":
       e.stopPropagation(); // not CodeMirror's own Ctrl+I
       return run(() => void openAiMenu());
-    case "n":
-    case "t": return run(newTab);
+    case "e":
+      e.stopPropagation(); // not CodeMirror's own Ctrl+E (macOS: end of line)
+      return run(() => void searchSelection());
+    case "n": return run(() => (e.shiftKey ? void newWindow([]).catch((err) => flash(String(err))) : newTab()));
+    case "t": return run(() => (e.shiftKey ? void reopenClosed() : newTab()));
     case "w": return run(() => void closeTab(active));
     case "o": return run(() => void openDialog());
     case "s": return run(() => void saveTab(active, e.shiftKey));
@@ -594,6 +773,8 @@ export async function boot() {
   // Show the window now: a hidden WebView2 window does not paint, so waiting for frames only delayed the show.
   // The editor DOM is built and the window background already has the theme colour.
   void showWindow();
+  // The menus are built after the first paint: a frame and a timeout later, off the startup path.
+  requestAnimationFrame(() => setTimeout(() => void loadMenus(), 0));
   const shown = new Promise<void>((resolve) => setTimeout(resolve, 60)); // let the show reach Rust before heavy parsing
   if (restoring) {
     restoreDone = shown

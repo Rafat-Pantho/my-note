@@ -17,6 +17,10 @@ export interface Settings {
   /** 0.5 to 1.0, applied to the background layer only. */
   opacity: number;
   reduceEffects: boolean;
+  openInNewWindow: boolean;
+  /** "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL template with %s. */
+  searchEngine: string;
+  statusBar: boolean;
 }
 
 export interface EffectStatus {

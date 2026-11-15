@@ -15,6 +15,8 @@ import { installLazy } from "./editor";
 const searchExt = search({ createPanel: () => ({ dom: document.createElement("div") }) });
 
 let panel: HTMLElement | null = null;
+/** Next / previous match with the panel's current options (works while the panel is closed, like Notepad's F3). */
+let step: ((dir: 1 | -1) => void) | null = null;
 
 const OPTIONS = [
   ["case", "Match case"],
@@ -34,6 +36,16 @@ export function openFind(view: EditorView, withReplace: boolean): void {
   find.focus();
   find.select();
 }
+
+/** F3 / Shift+F3. With no search text yet it opens the panel (seeded with the selection) instead. */
+export function findStep(view: EditorView, dir: 1 | -1): void {
+  const text = panel?.querySelector<HTMLInputElement>(".f-find")?.value;
+  if (!panel || !step || !text) openFind(view, false);
+  else step(dir);
+}
+
+export const replacedMessage = (n: number) =>
+  n === 0 ? "No matches" : `Replaced ${n} occurrence${n === 1 ? "" : "s"}`;
 
 function build(view: EditorView): HTMLElement {
   const el = document.createElement("div");
@@ -114,8 +126,9 @@ function build(view: EditorView): HTMLElement {
     if (!q) return;
     const n = count(q);
     replaceAll(view);
-    say(`Replaced ${n}`);
+    say(replacedMessage(n));
   };
+  step = go;
   const close = () => {
     el.remove();
     view.focus();
