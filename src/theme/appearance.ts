@@ -38,6 +38,7 @@ export interface Settings {
   autocorrect: boolean;
   /** File type id -> on/off (see `FILE_TYPES` in editor/spelltypes.ts). */
   spellTypes: Record<string, boolean>;
+  spellExtensions: string;
   /** `en_US` (built in) or the stem of a .dic + .aff pair in `spellDictDir`. */
   spellLanguage: string;
   spellDictDir: string;

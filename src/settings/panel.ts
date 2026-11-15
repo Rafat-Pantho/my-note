@@ -4,7 +4,6 @@
  *  so a value Rust clamped or rejected snaps back to what is really in effect. */
 import "./settings.css";
 import { invoke } from "@tauri-apps/api/core";
-import { FILE_TYPES } from "../editor/spelltypes";
 import { ENCODINGS, LINE_ENDINGS } from "../editor/statusbar";
 import { showInFolder } from "../tabs/ipc";
 import { type Appearance, type Settings, appearance, onAppearance, setAppearance } from "../theme/appearance";
@@ -130,20 +129,23 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
 
   /* ----- spelling: toggles, file types, dictionaries (the list is read from Rust when the section is shown) ----- */
 
-  const fileTypes = () => {
-    const box = el("div", "types");
-    for (const t of FILE_TYPES) {
-      const label = el("label", "type");
-      const c = el("input");
-      c.type = "checkbox";
-      c.onchange = () => void save({ spellTypes: { [t.id]: c.checked } });
-      syncs.push((a) => (c.checked = !!a.settings.spellTypes?.[t.id]));
-      const text = el("span", "", t.label);
-      if (t.hint) text.append(el("span", "hint", t.hint));
-      label.append(c, text);
-      box.append(label);
-    }
-    return box;
+  /** Extension list (spaces or commas, `(none)` = files with no extension) and the Untitled switch. */
+  const spellExtensions = () => {
+    const c = el("input", "ext");
+    c.type = "text";
+    c.spellcheck = false;
+    c.placeholder = "txt (none)";
+    const show = (a: Appearance | null) => a && (c.value = a.settings.spellExtensions);
+    c.onchange = async () => show(await save({ spellExtensions: c.value }));
+    syncs.push((a) => document.activeElement !== c && show(a));
+    return c;
+  };
+  const untitledSwitch = () => {
+    const c = el("input");
+    c.type = "checkbox";
+    c.onchange = () => void save({ spellTypes: { untitled: c.checked } });
+    syncs.push((a) => (c.checked = !!a.settings.spellTypes?.untitled));
+    return c;
   };
 
   interface Lang {
@@ -310,13 +312,15 @@ export function mountSettings(host: HTMLElement): SettingsPanel {
     spelling: section(
       "Spelling",
       row("Spell check", checkbox("spellCheck"), "Red wavy underline and right-click suggestions"),
-      row("Autocorrect", checkbox("autocorrect"), "Fixes common typos when you press Space or Enter. Ctrl+Z undoes it"),
+      row("Autocorrect", checkbox("autocorrect"), "A small built-in list of about 130 very common typos (teh, recieve), fixed when you press Space or Enter. Ctrl+Z undoes it. Never on pasted or AI text"),
       row("Language", langSelect, "Only dictionaries that are available are listed"),
       row("Extra dictionaries", dictFolder(), "A folder with Hunspell .dic and .aff pairs (bn_BD.dic + bn_BD.aff). Nothing is downloaded"),
       row("Your dictionary", personalButton(), "Words you added, one per line, in the config folder"),
       personalNote,
       el("h3", "", "Check spelling and autocorrect in"),
-      fileTypes(),
+      row("File extensions", spellExtensions(), "Separated by spaces. (none) = files with no extension. Code, config and log files are off unless you add them"),
+      row("Untitled tabs", untitledSwitch(), "Tabs that have not been saved yet"),
+      el("p", "note", "Spell check runs inside My Note with a built-in English dictionary. No text leaves your computer and nothing is downloaded."),
       el("p", "note", "Words in a writing system that has no dictionary loaded (for example Bengali with the English dictionary) are never underlined."),
     ),
     ai: section("AI", aiHost),

@@ -174,6 +174,8 @@ pub struct Settings {
     pub autocorrect: bool,
     /// File type -> on/off (`spell::FILE_TYPES` lists the keys). Unknown keys are ignored.
     pub spell_types: BTreeMap<String, bool>,
+    /// File extensions that get spell check and autocorrect, separated by spaces; `(none)` = no extension.
+    pub spell_extensions: String,
     /// Dictionary id: `en_US` (built in) or the stem of a `.dic` + `.aff` pair in `spell_dict_dir`.
     pub spell_language: String,
     /// Folder the user chose for extra dictionaries ("" = none). Read only when the language list is asked for.
@@ -222,6 +224,7 @@ impl Default for Settings {
             spell_check: true,
             autocorrect: true,
             spell_types: crate::spell::default_types(),
+            spell_extensions: "txt (none)".into(),
             spell_language: crate::spell::BUILTIN_ID.into(),
             spell_dict_dir: String::new(),
             recent_files: Vec::new(),
@@ -377,6 +380,12 @@ impl Settings {
         }
         if let Some(b) = get("autocorrect").and_then(|x| x.as_bool()) {
             self.autocorrect = b;
+        }
+        if let Some(e) = get("spellExtensions")
+            .and_then(|x| x.as_str())
+            .filter(|e| e.chars().count() <= 400 && !e.chars().any(char::is_control))
+        {
+            self.spell_extensions = e.trim().to_string();
         }
         if let Some(map) = get("spellTypes").and_then(|x| x.as_object()) {
             for (k, v) in map {
@@ -1125,6 +1134,27 @@ mod tests {
             st.update(&serde_json::json!({ "printPaper": 5 }))
                 .print_paper,
             "legal"
+        );
+    }
+
+    #[test]
+    fn spell_extensions_default_and_validation() {
+        let st = SettingsState::new(Settings::default());
+        assert_eq!(st.get().spell_extensions, "txt (none)");
+        assert_eq!(
+            st.update(&serde_json::json!({ "spellExtensions": " txt md " }))
+                .spell_extensions,
+            "txt md"
+        );
+        assert_eq!(
+            st.update(&serde_json::json!({ "spellExtensions": "a\nb" }))
+                .spell_extensions,
+            "txt md"
+        );
+        assert_eq!(
+            st.update(&serde_json::json!({ "spellExtensions": "x".repeat(401) }))
+                .spell_extensions,
+            "txt md"
         );
     }
 

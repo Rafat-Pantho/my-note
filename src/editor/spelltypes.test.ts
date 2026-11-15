@@ -1,34 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FILE_TYPES, fileTypeOf, spellKindFor } from "./spelltypes.ts";
+import { DEFAULT_SPELL_EXTENSIONS as D, NO_EXTENSION, extensionOf, parseExtensions, spellKindFor } from "./spelltypes.ts";
 
-test("file types from the path", () => {
-  assert.equal(fileTypeOf(null), "untitled");
-  assert.equal(fileTypeOf("C:\\notes\\todo.txt"), "text");
-  assert.equal(fileTypeOf("/home/a/README"), "text");
-  assert.equal(fileTypeOf("README.MD"), "markdown");
-  assert.equal(fileTypeOf("a.markdown"), "markdown");
-  assert.equal(fileTypeOf("index.html"), "web");
-  assert.equal(fileTypeOf("config.JSON"), "data");
-  assert.equal(fileTypeOf("run.log"), "data");
-  assert.equal(fileTypeOf("main.rs"), "code");
-  assert.equal(fileTypeOf("Makefile"), "code");
-  assert.equal(fileTypeOf(".gitignore"), "data");
-  assert.equal(fileTypeOf("photo.xyz"), "other");
-  assert.equal(fileTypeOf("dir.d/file"), "text", "a dot in a folder name is not an extension");
+const on = { untitled: true };
+
+test("extension of a path", () => {
+  assert.equal(extensionOf("C:\\notes\\todo.TXT"), "txt");
+  assert.equal(extensionOf("/home/a/README"), NO_EXTENSION);
+  assert.equal(extensionOf("a.tar.gz"), "gz");
+  assert.equal(extensionOf("notes."), NO_EXTENSION);
+  assert.equal(extensionOf("dir.d/file"), NO_EXTENSION, "a dot in a folder name is not an extension");
+  assert.equal(extensionOf("Makefile"), null);
+  assert.equal(extensionOf(".gitignore"), null);
 });
 
-test("the default switches: plain text, Markdown and untitled on, everything else off", () => {
-  const defaults: Record<string, boolean> = {
-    untitled: true, text: true, markdown: true, web: false, data: false, code: false, other: false,
-  };
-  assert.deepEqual(FILE_TYPES.map((t) => t.id).sort(), Object.keys(defaults).sort());
-  assert.equal(spellKindFor(null, defaults), "text");
-  assert.equal(spellKindFor("a.txt", defaults), "text");
-  assert.equal(spellKindFor("a.md", defaults), "markdown");
-  assert.equal(spellKindFor("a.py", defaults), null);
-  assert.equal(spellKindFor("a.json", defaults), null);
-  assert.equal(spellKindFor("a.py", { ...defaults, code: true }), "text");
-  assert.equal(spellKindFor("a.md", { ...defaults, markdown: false }), null);
-  assert.equal(spellKindFor("a.txt", {}), null);
+test("the list accepts dots, commas, case and the word none", () => {
+  assert.deepEqual([...parseExtensions(".TXT, md;*.log none")].sort(), ["(none)", "log", "md", "txt"]);
+  assert.equal(parseExtensions("  ").size, 0);
+});
+
+test("defaults: .txt and no extension on; code, config and log off", () => {
+  assert.equal(spellKindFor("a.txt", on, D), "text");
+  assert.equal(spellKindFor("/x/README", on, D), "text");
+  for (const f of ["a.log", "a.json", "a.js", "a.ts", "a.rs", "a.toml", "a.yaml", "a.cfg", "a.bat", "a.sh", "a.md", "Makefile"]) {
+    assert.equal(spellKindFor(f, on, D), null, f);
+  }
+});
+
+test("untitled follows its own switch; an edited list changes the result", () => {
+  assert.equal(spellKindFor(null, on, D), "text");
+  assert.equal(spellKindFor(null, { untitled: false }, D), null);
+  assert.equal(spellKindFor("a.md", on, "txt md"), "markdown");
+  assert.equal(spellKindFor("a.py", on, "txt py"), "text");
+  assert.equal(spellKindFor("a.txt", on, ""), null);
+  assert.equal(spellKindFor("a.txt", {}, D), "text");
 });

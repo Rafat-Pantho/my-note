@@ -216,7 +216,7 @@ async function syncSpell(): Promise<void> {
   const tab = active;
   const s = appearance()?.settings;
   if (!tab || tab.kind === "settings" || !s) return;
-  const kind = s.spellCheck || s.autocorrect ? spellKindFor(tab.path, s.spellTypes) : null;
+  const kind = s.spellCheck || s.autocorrect ? spellKindFor(tab.path, s.spellTypes, s.spellExtensions) : null;
   if (!spellMod) {
     if (!kind || spellLoading || view.state.doc.length === 0) return;
     spellLoading = true;
@@ -920,7 +920,7 @@ function applySettings({ settings: s, ai }: Appearance) {
     status.set({ wrap: s.wordWrap });
     scheduleSession();
   }
-  const spellKey = JSON.stringify([s.spellCheck, s.autocorrect, s.spellTypes, s.spellLanguage, s.spellDictDir]);
+  const spellKey = JSON.stringify([s.spellCheck, s.autocorrect, s.spellTypes, s.spellExtensions, s.spellLanguage, s.spellDictDir]);
   if (spellKey !== appliedSpell) {
     appliedSpell = spellKey;
     void syncSpell();

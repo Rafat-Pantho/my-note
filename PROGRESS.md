@@ -19,7 +19,7 @@
 - [x] M10 Notepad gap audit (see the audit table)
 - [x] M11 App shell gaps (see the M11 section)
 - [x] M12 Windows and file behavior (see the M12 section)
-- [ ] M13 Spell check feasibility note written, waiting for a decision (see the M13 section)
+- [x] M13 Spell check and autocorrect: extension list, wording (see the M13 section)
 - [x] M15 Regression check and docs (see the M15 section)
 - [x] M14 Page setup and print (see the M14 section)
 
@@ -66,6 +66,14 @@ Checks: `tsc` clean, `npm test` 210 pass (+2), `cargo fmt` and `clippy -D warnin
 2. Header `&f &t`, footer `Page &p of &P &d`: values appear (check with the Edge dialog's Headers and footers on and off).
 3. Print with word wrap off and on; a long line; a font change in Settings; the light and dark themes and Blur on: print stays black on white.
 
+## M13 result
+The brief was sent again unchanged after the note, so I took the recommended answers: keep the embedded checker (no new dependency or dictionary; sizes in A3), add the extension list, fix the wording.
+Checks: `tsc` clean, `npm test` 212 pass (spell type tests rewritten, +2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 123 pass (+1). Release exe 6,972,928 bytes (6.6 MB, budget 10 MB). Initial JS 13,806 + 796 + 91,469 = 106.1 kB gzipped (budget 300 KB; M15 106.6). Startup, 5 runs, ready / shown: 454/465, 465/476, 426/441, 420/431, 433/448 ms (median 433 / 448; the 400 ms budget is still NOT met). Outside connections still 0.
+- Spell check and autocorrect now follow an editable extension list (`spellExtensions`, default `txt (none)`; `(none)` = no extension), matched case-insensitively, dots and commas allowed. Saved files only; an unsaved tab follows the "Untitled tabs" switch. Never prose by name: Makefile, Dockerfile, `.gitignore`... match nothing. `.md` is now OFF by default (add `md` to turn it on; it then uses the Markdown tokenizer). Old per-type switches are gone from Settings (the Rust map keeps its keys; only `untitled` is read).
+- Settings > Spelling (a lazy section, not under General): wording now says autocorrect is a small built-in list of about 130 typos, never on pasted or AI text, and that spell check is built in, offline, nothing leaves the computer and nothing is downloaded.
+- Tests: extension parsing and matching, defaults (txt and no extension on; .log .json .js .ts .rs .toml .yaml .cfg .bat .sh .md off), untitled switch, edited list. Autocorrect boundary / skip-context tests already existed (`autocorrect.test.ts`); the Ctrl+Z step is a separate history event and was verified on the real exe in A3, not in a unit test.
+- Not done: suggestions from the native checker (impossible, see the note); a manual pass of the new settings UI in the real app was not run.
+
 ## M13 Spell check and autocorrect: feasibility note (stopped here, see "Needs a decision")
 Written at the start of M13, no code changed. Most of M13 already exists from A3 (see the A3 section); this note checks the brief against it.
 
@@ -91,7 +99,7 @@ Embedded Hunspell: crate `spellbook` 0.4.2 (MPL-2.0) + the en_US dictionary insi
 | Settings under General, lazy | It is its own Settings > Spelling section, in the lazy Settings chunk |
 | Tests | Extension / type matching (`spelltypes.test.ts`), autocorrect (`autocorrect.test.ts`, boundaries, case, skipped contexts) and spell tokenizer exist; the Ctrl+Z step is checked on the real exe, not in a unit test |
 
-### Needs a decision (I stopped; M13 is NOT ticked)
+### Needs a decision (answered by re-sending the brief; I took the recommended answers, see "M13 result")
 1. Is the embedded checker (already in the exe) acceptable? If you want native-only (no dictionary, no spellbook, about 0.8 MB smaller), suggestions, Add to dictionary and Ignore go away, because Windows exposes no suggestion API to our menu.
 2. Do you want the per-type switches replaced by (or extended with) an editable extension list with the brief's defaults? It is a small change: a `spellExtensions` string list in `config.json`, the list editor in Settings, and `fileTypeOf` replaced by an extension lookup. It would change today's defaults (Markdown off, `.log` stays off).
 3. Small wording fix: say in Settings that autocorrect is a small built-in list and that nothing leaves the machine.
