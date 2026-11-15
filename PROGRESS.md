@@ -196,7 +196,7 @@ All runs below drove the real release exe over the WebView2 debug port with real
 - `bundle.active` is now `true` (targets all: NSIS, MSI, dmg/app, deb/rpm/AppImage). `--no-bundle` still builds the exe alone.
 - Windows installer: WebView2 `downloadBootstrapper` (default). The installer fetches WebView2 only when it is missing.
 - Not done: no auto-updater (`includeUpdaterJson: false`), no code signing (macOS builds are unsigned and unnotarized; Windows SmartScreen will warn).
-- Icons: still the Tauri scaffold defaults. needs real icon. `my-note-logo.jpg` in the repo root is not wired in (it would need converting to the icon set with `npx tauri icon`).
+- Icons: generated from `my-note-logo.jpg` with `npx tauri icon my-note-logo.jpg` (Android/iOS sets deleted, not used); `bundle.icon` lists them in tauri.conf.json. Exe icon checked in the release build (6,016,000 bytes). To change: replace the jpg/png and re-run the command.
 - Not verified here: the workflows have not run on GitHub yet (no remote is configured in this clone). Local checks pass: tsc, npm test, vite build, cargo fmt, clippy `-D warnings`, cargo test (86 tests).
 
 ## How to release
