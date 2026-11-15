@@ -124,7 +124,7 @@ fn sniff_utf16_without_bom(bytes: &[u8]) -> Option<Encoding> {
     }
     let pairs = sample.len() / 2;
     let (mut even_zero, mut odd_zero) = (0usize, 0usize);
-    for pair in sample.chunks_exact(2) {
+    for pair in sample.as_chunks::<2>().0 {
         even_zero += (pair[0] == 0) as usize;
         odd_zero += (pair[1] == 0) as usize;
     }
@@ -207,7 +207,7 @@ pub fn decode(bytes: &[u8]) -> Decoded {
 }
 
 fn decode_utf16(bytes: &[u8], from: fn([u8; 2]) -> u16) -> String {
-    let units: Vec<u16> = bytes.chunks_exact(2).map(|c| from([c[0], c[1]])).collect();
+    let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|&c| from(c)).collect();
     String::from_utf16_lossy(&units)
 }
 
