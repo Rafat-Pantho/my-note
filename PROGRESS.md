@@ -20,7 +20,30 @@
 - [x] M11 App shell gaps (see the M11 section)
 - [x] M12 Windows and file behavior (see the M12 section)
 - [ ] M13 Spell check feasibility note written, waiting for a decision (see the M13 section)
+- [x] M15 Regression check and docs (see the M15 section)
 - [x] M14 Page setup and print (see the M14 section)
+
+## v0.2.0 release notes (not tagged, not pushed)
+New since the first release (M10 to M14; A1 to A5 are listed in their own sections):
+- Save all has a shortcut: Ctrl+Alt+S (ignored while AltGr is active).
+- Recent files: last 10, a Settings switch turns the history off and clears it.
+- Status bar shows the total character count.
+- `.LOG` files get a date and time line when opened (Settings switch, default on).
+- Read-only files: "Read-only" in the status bar, Save offers Save as instead of a raw error.
+- Ctrl+Shift+W closes the window; "Open with" while running follows the "Open files in a new window" setting.
+- Page setup: paper size (A4, Letter, Legal), `&t` time code; printing uses the editor font, respects word wrap, black on white in every theme.
+- Spell check and autocorrect (A3), Markdown mode (A4), file associations and single instance (A5).
+- Open: M13 (native vs embedded spell check, extension list) waits for a decision.
+
+## M15 Regression check (release exe, Windows 11 build 26300)
+Checks: `tsc` clean, `npm test` 210 pass, `cargo fmt --check` clean, `clippy -D warnings` clean, `cargo test` 122 pass, release build OK.
+| Measure | M6 / M8 | Post-M9 | Now | Change vs M6/M8 |
+|---|---|---|---|---|
+| Exe | 6,010,368 (M8, 5.7 MB) | same | 6,971,904 (6.6 MB, budget 10 MB) | +16% vs M8: FLAG. Mostly the spell dictionary (+839 KB, A3), the rest Markdown glue, single-instance, print and menu code. Budget still met |
+| Initial JS gz | 98.9 kB | - | 106.6 kB (14,384 + 796 + 91,469; budget 300 KB) | +7.8%, under 10% |
+| Editor ready / shown, median of 5 | about 429-436 / 443-469 ms | 436 / 443 | 473 / 488 ms (ready 429-497, shown 443-517) | +8.5% / +10.2% vs post-M9: shown is on the 10% line, FLAG. The 400 ms budget was never met and still is not. Same machine, noisy hour; about 340 ms is WebView2 before our code |
+Lazy chunks (checked over the debug port on the real exe, resource list after startup): NOT loaded: page setup, print CSS, settings, panel, find, Markdown mode, preview, web search, AI controller, diff. Loaded: menubar (after first paint, by design) and spell + tokenize (only because the restored session had text; an empty first tab loads neither, A3). Outside connections: 0 for my-note.exe and every WebView2 process (netstat after 6 s, loopback excluded; the debug-port loopback is the only socket).
+Not run: macOS, Linux, Windows 10, a machine with the network unplugged.
 
 ## M14 Page setup and print
 Scope: most of this milestone existed from A2 (dialog, margins, orientation, header and footer through `@page` margin boxes, `&f &p &P &d &l &c &r &&`, lazy chunk, saved in config). Added only what the audit and the brief found missing.

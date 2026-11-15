@@ -10,14 +10,14 @@ Built with Tauri v2 (Rust backend), vanilla TypeScript, Vite and CodeMirror 6. N
 
 ## Features
 
-- Tabs, open and save, with Windows Notepad's basic behaviour. Recent files (File > Recent), reopen the last 10 closed tabs, a tab right-click menu (close others, copy path, show in folder, move to a new window).
+- Tabs, open and save, with Windows Notepad's basic behaviour. Recent files (File > Recent, last 10, can be switched off in Settings), reopen the last 10 closed tabs, a tab right-click menu (close others, copy path, show in folder, move to a new window).
 - Files on disk are watched only when the window regains focus: a file changed by another program gets a bar with Reload / Dismiss (a dialog if you have unsaved edits). Optional auto-save (off by default) saves named files after a pause; untitled tabs are never saved automatically.
-- Window size and position are remembered. Double-click or "Open with" a file while My Note is running opens it in a new tab of the open window.
+- Window size and position are remembered. Double-click or "Open with" a file while My Note is running follows the setting "Open files in a new window" (default: a new tab of the open window).
 - Encodings: UTF-8, UTF-8 with BOM, UTF-16 LE/BE with BOM, Windows-1252. Line endings: CRLF and LF. Each file keeps its own encoding and line ending.
 - File types: `.txt`, `.md`, `.markdown` and `.log` appear in Windows' *Open with* menu. My Note does not make itself the default app; choose that in Windows settings if you want it.
-- Find and replace, go to line, print, page setup (margins, orientation, header and footer codes), zoom, word wrap.
+- Find and replace, go to line, print, page setup (paper size A4/Letter/Legal, margins, orientation, header and footer with `&f &p &P &d &t` codes), zoom, a character count in the status bar, word wrap.
 - Optional display of control characters (ZWJ, ZWNJ, bidi marks, BOM) as labelled boxes, and right-to-left reading order per tab.
-- Insert date and time (F5).
+- Insert date and time (F5). A file whose first line is `.LOG` gets the date and time added when opened (setting). Read-only files show "Read-only" in the status bar and Save offers Save as.
 - Session restore: unsaved tabs come back after a restart or a crash.
 - Spell check (red wavy underline, right-click suggestions, Add to dictionary, Ignore) and autocorrect of common typos, both offline and switchable per file type. English (US) is built in; other languages are Hunspell `.dic` + `.aff` files from a folder you choose (nothing is downloaded). Words in a writing system with no loaded dictionary, such as Bengali, are never underlined.
 - Markdown mode for `.md` files (and any tab on request): syntax colours, a formatting toolbar (bold, italic, strikethrough, headings, lists, link, code, quote, table), list continuation with Tab / Shift+Tab nesting, pipe tables that stay aligned (Tab between cells, row and column menu), and Source / Split / Preview views. The preview shows no raw HTML or scripts, opens links only in your browser after you confirm (http, https, mailto), and loads remote images only after you agree, once per file. Files stay plain Markdown.
@@ -82,10 +82,11 @@ Optional command-line flags: `--no-effects` starts with solid backgrounds only. 
 | Open file | Ctrl+O |
 | Save / Save as | Ctrl+S / Ctrl+Shift+S |
 | Close tab | Ctrl+W |
-| Close window | Alt+F4 (or File > Exit) |
-| Save all, page setup, right-to-left, control characters, auto-save | menu or Settings only (no shortcut) |
+| Close window | Ctrl+Shift+W or Alt+F4 (or File > Exit) |
+| Save all | Ctrl+Alt+S |
+| Page setup, right-to-left, control characters, auto-save | menu or Settings only (no shortcut) |
 | Move a tab to a new window | right-click the tab |
-| Next / previous tab | Ctrl+PageDown / Ctrl+PageUp |
+| Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab, Ctrl+PageDown / Ctrl+PageUp |
 | Undo / Redo | Ctrl+Z / Ctrl+Y |
 | Select all | Ctrl+A |
 | Find / Replace | Ctrl+F / Ctrl+H |
