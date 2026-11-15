@@ -158,6 +158,8 @@ pub struct Settings {
     pub print_footer: String,
     /// Open files from File > Open and Recent in a new window instead of a new tab.
     pub open_in_new_window: bool,
+    /// Opening a file whose first line is exactly `.LOG` appends a date and time line (like Notepad).
+    pub log_timestamp: bool,
     /// Keep a list of recent files. Turning it off also clears the list.
     pub recent_enabled: bool,
     /// Web search engine for Ctrl+E: "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL
@@ -211,6 +213,7 @@ impl Default for Settings {
             print_footer: "Page &p".into(),
             open_in_new_window: false,
             recent_enabled: true,
+            log_timestamp: true,
             search_engine: String::new(),
             status_bar: true,
             spell_check: true,
@@ -341,6 +344,9 @@ impl Settings {
         }
         if let Some(b) = get("openInNewWindow").and_then(|x| x.as_bool()) {
             self.open_in_new_window = b;
+        }
+        if let Some(b) = get("logTimestamp").and_then(|x| x.as_bool()) {
+            self.log_timestamp = b;
         }
         if let Some(b) = get("recentEnabled").and_then(|x| x.as_bool()) {
             self.recent_enabled = b;
@@ -1090,6 +1096,16 @@ mod tests {
         assert_eq!(l.len(), MAX_RECENT);
         assert_eq!(l[0], "/f24.txt");
         assert_eq!(l[MAX_RECENT - 1], "/f15.txt");
+    }
+
+    #[test]
+    fn log_timestamp_defaults_on_and_can_be_switched_off() {
+        let st = SettingsState::new(Settings::default());
+        assert!(st.get().log_timestamp);
+        assert!(
+            !st.update(&serde_json::json!({ "logTimestamp": false }))
+                .log_timestamp
+        );
     }
 
     #[test]

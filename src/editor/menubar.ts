@@ -106,7 +106,7 @@ export function menuDefs(c: Commands): MenuDef[] {
         { label: "Page set&up...", run: c.pageSetup },
         SEP,
         { label: "&Close tab", hint: "Ctrl+W", run: c.closeTab },
-        { label: "Close wi&ndow", hint: "Alt+F4", run: c.closeWindow },
+        { label: "Close wi&ndow", hint: "Ctrl+Shift+W", run: c.closeWindow },
         { label: "E&xit", run: c.closeWindow },
       ],
     },

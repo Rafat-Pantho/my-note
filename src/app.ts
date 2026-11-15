@@ -17,6 +17,8 @@ import {
 } from "./tabs/ipc";
 import { ClosedTabs, closedEntry } from "./tabs/closed";
 import { saveAllOrder } from "./tabs/saveall";
+import { isLogFile, logAppendix } from "./tabs/logfile";
+import { isPermissionError, saveAction } from "./tabs/readonly";
 import { compare, message, promptFor } from "./tabs/external";
 import { buildSession, parseSession, type Prefs, type Session } from "./tabs/session";
 import type { SettingsPanel } from "./settings/panel";
@@ -134,7 +136,7 @@ function refreshAll() {
   refreshTabs();
   refreshTitle();
   refreshCursor();
-  status.set({ zoom: prefs.zoom, wrap: prefs.wrap, encoding: active.encoding, lineEnding: active.lineEnding });
+  status.set({ readOnly: active.readOnly === true, zoom: prefs.zoom, wrap: prefs.wrap, encoding: active.encoding, lineEnding: active.lineEnding });
 }
 
 function markDirty() {
@@ -330,12 +332,13 @@ async function loadFromDisk(tab: Tab): Promise<boolean> {
   tab.state = t.state;
   tab.encoding = t.encoding;
   tab.lineEnding = t.lineEnding;
+  tab.readOnly = t.readOnly;
   tab.stamp = t.stamp;
   return true;
 }
 
 /** Reads a file into a fresh tab (not yet in `tabs`). Shows errors; null on failure/cancel. */
-async function readIntoTab(path: string): Promise<Tab | null> {
+async function readIntoTab(path: string, logStamp = false): Promise<Tab | null> {
   const name = basename(path);
   let allowLarge = false;
   for (;;) {
@@ -343,7 +346,14 @@ async function readIntoTab(path: string): Promise<Tab | null> {
       status.message(`Opening ${name}...`);
       const f = await readFile(path, allowLarge);
       if (f.size > LARGE_FILE_MB * 1024 * 1024) await nextFrame(); // let the message paint
-      const tab = makeTab({ path, name, text: f.text, encoding: f.encoding, lineEnding: f.lineEnding });
+      const tab = makeTab({ path, name, text: f.text, encoding: f.encoding, lineEnding: f.lineEnding, readOnly: f.readOnly });
+      if (logStamp && appearance()?.settings.logTimestamp !== false && isLogFile(f.text)) {
+        // Notepad's .LOG: caret to the end, a date and time line appended, the tab marked as changed.
+        const add = logAppendix(f.text, dateTimeText(new Date()));
+        const end = f.text.length;
+        tab.state = tab.state!.update({ changes: { from: end, insert: add }, selection: { anchor: end + add.length } }).state;
+        tab.dirty = true;
+      }
       tab.stamp = (await fileStamps([path]).catch(() => [null]))[0] ?? undefined;
       status.message("");
       return tab;
@@ -374,7 +384,7 @@ async function openPaths(paths: string[]) {
       last = existing;
       continue;
     }
-    const tab = await readIntoTab(p);
+    const tab = await readIntoTab(p, true);
     if (!tab) continue;
     void recentAdd(p).catch(() => {});
     if (tabs.length === 1 && isBlank(tabs[0])) tabs = [];
@@ -575,23 +585,53 @@ async function loadMenus() {
   );
 }
 
+/** Read-only file: ask instead of showing a raw error. True = go on with Save as. */
+async function offerSaveAs(tab: Tab): Promise<boolean> {
+  const r = await modal({
+    message: `${tab.name} is read-only, so it cannot be saved in place. Save a copy under another name?`,
+    buttons: ["Save as...", "Cancel"],
+  });
+  return r.button === "Save as...";
+}
+
 async function saveTab(tab: Tab, saveAs: boolean): Promise<boolean> {
   if (!tab.state) await loadFromDisk(tab);
   let path = tab.path;
+  let readOnlyHit = false;
+  if (saveAction(tab, saveAs) === "offer-save-as") {
+    if (!(await offerSaveAs(tab))) return false;
+    saveAs = true;
+  }
   if (!path || saveAs) {
     path = await pickSavePath(tab.path ? basename(tab.path) : "Untitled.txt");
     if (!path) return false;
   }
   const state = tab === active ? view.state : tab.state!;
-  try {
-    await writeFile(path, state.doc.toString(), tab.encoding, tab.lineEnding);
-  } catch (e) {
-    await modal({ message: `Cannot save ${path}\n${String(e)}`, buttons: ["OK"] });
-    return false;
+  for (;;) {
+    try {
+      await writeFile(path, state.doc.toString(), tab.encoding, tab.lineEnding);
+      break;
+    } catch (e) {
+      if (!readOnlyHit && path === tab.path && isPermissionError(String(e))) {
+        // Became read-only after it was opened: same answer as for a file that opened read-only.
+        readOnlyHit = true;
+        tab.readOnly = true;
+        if (tab === active) status.set({ readOnly: true });
+        if (!(await offerSaveAs(tab))) return false;
+        const p = await pickSavePath(basename(path));
+        if (!p) return false;
+        path = p;
+        continue;
+      }
+      await modal({ message: `Cannot save ${path}\n${String(e)}`, buttons: ["OK"] });
+      return false;
+    }
   }
   if (!tab.path || saveAs) void recentAdd(path).catch(() => {});
   tab.path = path;
+  tab.readOnly = false; // a path we just wrote is writable
   if (tab === active) {
+    status.set({ readOnly: false });
     void syncSpell(); // the file type may have changed (Save as .py: no spell check)
     void syncMarkdown(); // ... and Save as x.md turns Markdown mode on
   }
@@ -916,9 +956,13 @@ async function gotoLine() {
   view.focus();
 }
 
+/** The F5 format; also used by .LOG files. */
+function dateTimeText(d: Date): string {
+  return `${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} ${d.toLocaleDateString()}`;
+}
+
 function insertDateTime() {
-  const d = new Date();
-  const text = `${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} ${d.toLocaleDateString()}`;
+  const text = dateTimeText(new Date());
   view.dispatch({ ...view.state.replaceSelection(text), scrollIntoView: true, userEvent: "input" });
 }
 
@@ -980,7 +1024,7 @@ function onKeyDown(e: KeyboardEvent) {
       return run(() => void searchSelection());
     case "n": return run(() => (e.shiftKey ? void newWindow([]).catch((err) => flash(String(err))) : newTab()));
     case "t": return run(() => (e.shiftKey ? void reopenClosed() : newTab()));
-    case "w": return run(() => void closeTab(active));
+    case "w": return run(() => (e.shiftKey ? void closeApp() : void closeTab(active)));
     case "o": return run(() => void openDialog());
     case "s": return run(() => void saveTab(active, e.shiftKey));
     case "f": return run(() => void openFind(false));
@@ -1062,6 +1106,6 @@ export async function boot() {
 
   void listen<{ paths: string[] }>("tauri://drag-drop", (e) => void openPaths(e.payload.paths));
   // A second launch (double-click, Open with) passes its files here; the window was already brought forward.
-  void listen<string[]>("open-paths", (e) => void openPaths(e.payload));
+  void listen<string[]>("open-paths", (e) => void openFiles(e.payload)); // follows "Open files in a new window"
   void listen("close-requested", () => void closeApp());
 }

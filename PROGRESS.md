@@ -18,6 +18,31 @@
 - [x] A5 File associations and polish (see the A5 section)
 - [x] M10 Notepad gap audit (see the audit table)
 - [x] M11 App shell gaps (see the M11 section)
+- [x] M12 Windows and file behavior (see the M12 section)
+
+## M12 Windows and file behavior
+Scope: the audit's Missing / Partial items (.LOG, read-only) plus two gaps found while checking items 1-2. New window, "Opening files" setting, single instance and changed-on-disk handling were already Done (A1, A2, A5) and were not rewritten. Item 4 differs from the brief on purpose: a clean tab shows the existing Reload / Dismiss bar (not a silent reload), because A2 chose a non-blocking bar so a reload never replaces text under the user's hands. Dirty and deleted files already behave as asked (dialog Reload / Keep mine; deleted: bar, text kept).
+Checks: `tsc` clean, `npm test` 208 pass (+4), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 121 pass (+1). Release exe 6,970,880 bytes (6.6 MB; +4,096 vs M11). Initial JS 14,297 + 796 + 91,469 = 106.6 kB gzipped by 1000 (M11 106.1; budget 300 KB). Startup, 7 runs, editor ready / shown medians 473 / 478 ms (range 455-497 / 462-518); M11's single run was 461 / 465. The 400 ms budget is still NOT met; our own part is unchanged (the new code only runs when a file opens or saves).
+
+### Done
+- .LOG: when a file is opened (File > Open, Recent, launch args, Open with, drag-drop, not session restore and not Reload) and its first line is exactly `.LOG`, the caret goes to the end, a date and time line (F5 format, shared `dateTimeText`) is appended (a line break first only if the text does not end with one) and the tab is dirty. Setting `logTimestamp` (default on; Settings > General "Timestamp .LOG files"). Logic in `src/tabs/logfile.ts`.
+- Read-only: Rust `read_file` returns `readOnly` (file attribute / no write permission). The tab shows "Read-only" in the status bar; Save on such a tab asks "Save a copy under another name?" and goes to Save as. A write that fails with a permission error on a file that was writable when opened gets the same question. Save as clears the flag. Logic in `src/tabs/readonly.ts`. Reload refreshes the flag.
+- Ctrl+Shift+W closes the window (same path as File > Close window, with the save prompts); the menu label now shows it.
+- Open with while running: the `open-paths` event now goes through the same function as File > Open, so it follows "Open files in a new window" (a new process via `--new-window` when on and the window has content; otherwise a tab). No new single-instance cost: the plugin was already there (A5).
+
+### Decisions
+- New window = a new process (`--new-window`), unchanged from A1: no second webview to keep warm, startup of the first window is untouched. Safety already in place: only the first window reads or writes `session.json`; extra windows start empty and never save the window geometry; `config.json` is written atomically (temp file and rename). Two windows share `config.json` and the last writer wins (the other window's change can be lost, never a corrupt file).
+- Read-only is decided when the file is read and again when a write fails; there is no polling.
+
+### Manual multi-window checks (NOT run: nothing below was driven in the real app this milestone; only unit tests, a clean build and the startup timing)
+1. Ctrl+Shift+N: a second window opens empty; the first keeps its tabs. Close the second: the first window's session is unchanged after a restart.
+2. Ctrl+Shift+W closes the window; unsaved tabs ask first; Cancel keeps it open.
+3. Edit settings in window 1 and window 2 (different settings), close both: `config.json` is valid JSON; note which change survived (last writer wins).
+4. Settings > "Open files in a new window" on: double-click a file in Explorer while My Note is running with a file open: a new window shows it; with an empty window it opens in place. Off: new tab in the running window.
+5. .LOG: a file whose first line is `.LOG` gets a time line at the end and a dirty mark, caret on the new line; open it again after saving: another line. `.log` or ` .LOG` gets nothing. Setting off: nothing. Reload from disk does not add a line.
+6. Read-only: set the read-only attribute (`attrib +R x.txt`), open it: "Read-only" in the status bar, typing works, Ctrl+S asks, Save as writes a copy and the label goes. Clear the attribute while the file is open, Ctrl+S still asks once (flag known) - Save as is the way out; reopen to clear it.
+7. Make a file read-only after opening it, then save: the question appears (not a raw "Access is denied").
+8. Not testable here: macOS and Linux (read-only permission bits, `--new-window`), a file on a read-only network share, a second monitor.
 
 ## M11 App shell gaps
 Scope: only the audit's Partial / Missing items. Items 1 (menu bar), 2 (F3), 6 (tab menu), 7 (Ctrl+Shift+Tab) and the Status bar toggle were already Done and were not touched; New window and Page setup were already enabled, so they were not disabled.

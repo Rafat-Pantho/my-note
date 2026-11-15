@@ -21,6 +21,7 @@ export interface FileData {
   encoding: string;
   lineEnding: string;
   size: number;
+  readOnly: boolean;
 }
 
 /** Rejects with "large:<bytes>" for files over 100 MB unless `allowLarge`. */

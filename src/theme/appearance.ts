@@ -28,6 +28,7 @@ export interface Settings {
   printFooter: string;
   openInNewWindow: boolean;
   recentEnabled: boolean;
+  logTimestamp: boolean;
   /** "" (not chosen yet), "bing", "google", "duckduckgo" or a custom URL template with %s. */
   searchEngine: string;
   statusBar: boolean;

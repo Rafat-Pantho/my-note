@@ -270,11 +270,15 @@ struct ReadMeta {
     encoding: &'static str,
     line_ending: &'static str,
     size: u64,
+    /// The file has the read-only attribute (or no write permission): saving in place would fail.
+    read_only: bool,
 }
 
 #[tauri::command]
 pub async fn read_file(path: String, allow_large: bool) -> Result<Response, String> {
-    let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    let md = fs::metadata(&path).map_err(|e| e.to_string())?;
+    let size = md.len();
+    let read_only = md.permissions().readonly();
     if size > LARGE_FILE_BYTES && !allow_large {
         return Err(format!("large:{size}"));
     }
@@ -285,6 +289,7 @@ pub async fn read_file(path: String, allow_large: bool) -> Result<Response, Stri
         encoding: decoded.encoding.as_str(),
         line_ending: decoded.line_ending.as_str(),
         size,
+        read_only,
     })
     .map_err(|e| e.to_string())?;
     Ok(Response::new(pack_body(&meta, decoded.text.as_bytes())))

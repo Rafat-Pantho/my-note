@@ -8,6 +8,8 @@ export interface Tab {
   /** null while a restored file-backed tab has not been read from disk yet. */
   state: EditorState | null;
   dirty: boolean;
+  /** The file on disk is read-only: Save offers Save as. */
+  readOnly?: boolean;
   encoding: string;
   lineEnding: string;
   /** The single Settings tab: no document, never saved or restored. */

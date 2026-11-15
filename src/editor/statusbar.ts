@@ -23,6 +23,7 @@ export interface StatusInfo {
   selected: number;
   /** Total characters in the document (UTF-16 code units, from the document length). */
   chars: number;
+  readOnly: boolean;
   zoom: number;
   wrap: boolean;
   encoding: string;
@@ -65,6 +66,9 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
   sp.className = "sp";
   const pos = mk("span");
   const chars = mk("span", "Characters in the document");
+  const ro = mk("span", "This file is read-only. Save offers Save as.");
+  ro.className = "ro";
+  ro.hidden = true;
   const sel = mk("span");
   const zoom = mk("button", "Reset zoom (Ctrl+0)");
   const wrap = mk("button", "Toggle word wrap (Alt+Z)");
@@ -75,7 +79,7 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
   const aiText = mk("span");
   const aiBadge = mk("span");
   ai.append(aiText, aiBadge);
-  host.append(ai, msg, sp, pos, chars, sel, zoom, wrap, enc, eol);
+  host.append(ai, msg, sp, ro, pos, chars, sel, zoom, wrap, enc, eol);
 
   ai.onclick = h.openAi;
   zoom.onclick = h.resetZoom;
@@ -103,6 +107,10 @@ export function createStatusBar(host: HTMLElement, h: StatusHandlers) {
         pos.dataset.l = String(s.line ?? pos.dataset.l);
         pos.dataset.c = String(s.col ?? pos.dataset.c);
         pos.textContent = `Ln ${pos.dataset.l}, Col ${pos.dataset.c}`;
+      }
+      if (s.readOnly !== undefined) {
+        ro.hidden = !s.readOnly;
+        ro.textContent = s.readOnly ? "Read-only" : "";
       }
       if (s.chars !== undefined) chars.textContent = `${s.chars.toLocaleString()} chars`;
       if (s.selected !== undefined) sel.textContent = s.selected > 0 ? `${s.selected} selected` : "";
