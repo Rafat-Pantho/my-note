@@ -984,10 +984,18 @@ async function print() {
       document.head.append(style);
     }
     style.textContent = printCss(
-      { marginMm: s.printMarginMm, landscape: s.printLandscape, header: s.printHeader, footer: s.printFooter },
-      { name: active.name, date: new Date().toLocaleDateString() },
+      { paper: s.printPaper, marginMm: s.printMarginMm, landscape: s.printLandscape, header: s.printHeader, footer: s.printFooter },
+      {
+        name: active.name,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      },
     );
   }
+  // Print uses the editor's font and wrap setting; colours are fixed black on white in the print CSS.
+  el.style.whiteSpace = prefs.wrap ? "pre-wrap" : "pre";
+  el.style.fontFamily = "var(--mono-user, var(--mono-font))";
+  if (s) el.style.fontSize = `${Math.round(s.fontSize * 0.75 * 10) / 10}pt`;
   el.textContent = view.state.doc.toString();
   window.addEventListener("afterprint", () => (el.textContent = ""), { once: true });
   window.print();

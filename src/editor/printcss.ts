@@ -1,8 +1,12 @@
 /** Print page setup -> CSS. Pure. Margins and orientation use `@page`; header and footer use `@page` margin boxes
  *  (supported by the WebView2 / Chromium print engine), with these codes (like Notepad's):
- *  &f file name, &p page number, &P page count, &d date, &l &c &r left / centre / right, && an ampersand. */
+ *  &f file name, &p page number, &P page count, &d date, &t time, &l &c &r left / centre / right, && an ampersand. */
+
+export const PAPER_SIZES = { a4: "A4", letter: "letter", legal: "legal" } as const;
+export type Paper = keyof typeof PAPER_SIZES;
 
 export interface PrintSetup {
+  paper?: string;
   marginMm: number;
   landscape: boolean;
   header: string;
@@ -12,6 +16,7 @@ export interface PrintSetup {
 export interface PrintContext {
   name: string;
   date: string;
+  time?: string;
 }
 
 type Part = { text: string } | { counter: "page" | "pages" };
@@ -37,6 +42,7 @@ export function parseCodes(text: string, ctx: PrintContext): Record<Align, Part[
     const code = text[++i];
     if (code === "f") add({ text: ctx.name });
     else if (code === "d") add({ text: ctx.date });
+    else if (code === "t") add({ text: ctx.time ?? "" });
     else if (code === "p") add({ counter: "page" });
     else if (code === "P") add({ counter: "pages" });
     else if (code === "l") at = "left";
@@ -62,7 +68,8 @@ function boxes(where: "top" | "bottom", text: string, ctx: PrintContext): string
 /** The stylesheet text for one print job. Values are clamped, so a bad setting cannot break the CSS. */
 export function printCss(s: PrintSetup, ctx: PrintContext): string {
   const margin = Number.isFinite(s.marginMm) ? Math.min(50, Math.max(0, Math.round(s.marginMm))) : 20;
-  const rules = [`size: ${s.landscape ? "landscape" : "portrait"};`, `margin: ${margin}mm;`];
+  const paper = PAPER_SIZES[(s.paper ?? "a4") as Paper] ?? PAPER_SIZES.a4;
+  const rules = [`size: ${paper} ${s.landscape ? "landscape" : "portrait"};`, `margin: ${margin}mm;`];
   const top = boxes("top", s.header, ctx);
   const bottom = boxes("bottom", s.footer, ctx);
   if (top) rules.push(top);

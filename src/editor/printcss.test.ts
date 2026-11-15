@@ -6,8 +6,19 @@ const ctx = { name: "notes.txt", date: "11/15/2026" };
 const setup = (over = {}) => ({ marginMm: 20, landscape: false, header: "", footer: "", ...over });
 
 test("margin and orientation", () => {
-  assert.match(printCss(setup(), ctx), /size: portrait;\s+margin: 20mm;/);
-  assert.match(printCss(setup({ landscape: true, marginMm: 12 }), ctx), /size: landscape;\s+margin: 12mm;/);
+  assert.match(printCss(setup(), ctx), /size: A4 portrait;\s+margin: 20mm;/);
+  assert.match(printCss(setup({ landscape: true, marginMm: 12 }), ctx), /size: A4 landscape;\s+margin: 12mm;/);
+});
+
+test("paper size: A4, Letter, Legal; an unknown value falls back to A4", () => {
+  assert.match(printCss(setup({ paper: "letter" }), ctx), /size: letter portrait;/);
+  assert.match(printCss(setup({ paper: "legal", landscape: true }), ctx), /size: legal landscape;/);
+  assert.match(printCss(setup({ paper: "tabloid" }), ctx), /size: A4 portrait;/);
+});
+
+test("&t is the time, and is empty when no time is given", () => {
+  assert.deepEqual(parseCodes("&t", { ...ctx, time: "9:05 AM" }).center, [{ text: "9:05 AM" }]);
+  assert.deepEqual(parseCodes("a&tb", ctx).center, [{ text: "ab" }]);
 });
 
 test("margins are clamped to 0-50 mm and bad numbers fall back", () => {

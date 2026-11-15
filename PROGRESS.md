@@ -19,6 +19,29 @@
 - [x] M10 Notepad gap audit (see the audit table)
 - [x] M11 App shell gaps (see the M11 section)
 - [x] M12 Windows and file behavior (see the M12 section)
+- [ ] M13 Spell check feasibility note written, waiting for a decision (see the M13 section)
+- [x] M14 Page setup and print (see the M14 section)
+
+## M14 Page setup and print
+Scope: most of this milestone existed from A2 (dialog, margins, orientation, header and footer through `@page` margin boxes, `&f &p &P &d &l &c &r &&`, lazy chunk, saved in config). Added only what the audit and the brief found missing.
+Checks: `tsc` clean, `npm test` 210 pass (+2), `cargo fmt` and `clippy -D warnings` clean, `cargo test` 122 pass (+1). Release exe 6,971,904 bytes (6.6 MB; +1,024 vs M12). Initial JS 14,384 + 796 + 91,469 = 106.6 kB gzipped (M12 106.6; budget 300 KB). Page setup chunk (lazy) 2.4 kB raw. Startup not re-measured: nothing here runs before the first print or the dialog.
+
+### Done
+- Paper size: A4 (default), Letter, Legal. Setting `printPaper` (validated in Rust, unknown values ignored), dialog select, emitted as `size: A4 portrait` / `letter landscape` in the one `@page` rule; an unknown value falls back to A4.
+- `&t` time code (same short format as F5), tested.
+- Print follows the editor: font family and size from the Settings (size in points = px x 0.75), word wrap respected (`pre-wrap` when wrap is on, `pre` when off, so long lines are cut at the page edge instead of wrapped). Colours were already fixed black on white in the print CSS for every theme and effect mode.
+- Dialog help text states the limits (see below).
+
+### What the print engine does (checked / not checked)
+- Checked in A2 on the real exe with `Page.printToPDF` (`preferCSSPageSize`): `@page` orientation, margins and the margin-box header and footer (file name, date, "Page 1 of 1") come out right. Not re-checked for paper size in M14 (the same rule carries it; Chromium honours `size:`), and I did NOT drive the native Edge print dialog.
+- Limits (also in the dialog): the print dialog has its own paper size, margins and "Headers and footers" option; they can override or double our values, so the user should pick the same paper size, Margins Default, and turn Edge's Headers and footers off if two appear. Runtimes without margin-box support print no header or footer; margins, size and orientation still work. macOS and Linux (WebKit) ignore margin boxes: header and footer will not print there (not tested).
+- Page count `&P` is the engine's `counter(pages)`.
+- Nothing is faked: no screen-side page preview and no own pagination.
+
+### Manual checks (NOT run here)
+1. Page setup: pick Letter and Legal, landscape, margin 10; print to PDF: page size and orientation follow when the print dialog's paper size is the same.
+2. Header `&f &t`, footer `Page &p of &P &d`: values appear (check with the Edge dialog's Headers and footers on and off).
+3. Print with word wrap off and on; a long line; a font change in Settings; the light and dark themes and Blur on: print stays black on white.
 
 ## M13 Spell check and autocorrect: feasibility note (stopped here, see "Needs a decision")
 Written at the start of M13, no code changed. Most of M13 already exists from A3 (see the A3 section); this note checks the brief against it.

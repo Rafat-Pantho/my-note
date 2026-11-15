@@ -23,6 +23,8 @@ export interface Settings {
   showControlChars: boolean;
   printMarginMm: number;
   printLandscape: boolean;
+  /** "a4", "letter" or "legal". */
+  printPaper: string;
   /** Header / footer codes: &f file name, &p page, &P pages, &d date, &l &c &r alignment. */
   printHeader: string;
   printFooter: string;

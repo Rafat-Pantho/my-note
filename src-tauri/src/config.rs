@@ -154,6 +154,8 @@ pub struct Settings {
     /// &P pages, &d date, &l &c &r alignment, && for an ampersand).
     pub print_margin_mm: u32,
     pub print_landscape: bool,
+    /// Paper size for printing: "a4", "letter" or "legal".
+    pub print_paper: String,
     pub print_header: String,
     pub print_footer: String,
     /// Open files from File > Open and Recent in a new window instead of a new tab.
@@ -209,6 +211,7 @@ impl Default for Settings {
             show_control_chars: false,
             print_margin_mm: 20,
             print_landscape: false,
+            print_paper: "a4".into(),
             print_header: "&f".into(),
             print_footer: "Page &p".into(),
             open_in_new_window: false,
@@ -329,6 +332,12 @@ impl Settings {
         }
         if let Some(b) = get("printLandscape").and_then(|x| x.as_bool()) {
             self.print_landscape = b;
+        }
+        if let Some(p) = get("printPaper")
+            .and_then(|x| x.as_str())
+            .filter(|p| matches!(*p, "a4" | "letter" | "legal"))
+        {
+            self.print_paper = p.to_string();
         }
         if let Some(t) = get("printHeader")
             .and_then(|x| x.as_str())
@@ -1096,6 +1105,27 @@ mod tests {
         assert_eq!(l.len(), MAX_RECENT);
         assert_eq!(l[0], "/f24.txt");
         assert_eq!(l[MAX_RECENT - 1], "/f15.txt");
+    }
+
+    #[test]
+    fn print_paper_accepts_only_known_sizes() {
+        let st = SettingsState::new(Settings::default());
+        assert_eq!(st.get().print_paper, "a4");
+        assert_eq!(
+            st.update(&serde_json::json!({ "printPaper": "legal" }))
+                .print_paper,
+            "legal"
+        );
+        assert_eq!(
+            st.update(&serde_json::json!({ "printPaper": "tabloid" }))
+                .print_paper,
+            "legal"
+        );
+        assert_eq!(
+            st.update(&serde_json::json!({ "printPaper": 5 }))
+                .print_paper,
+            "legal"
+        );
     }
 
     #[test]
